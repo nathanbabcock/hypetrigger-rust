@@ -1,0 +1,15 @@
+{
+  "name": "hypetrigger-wasm-demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "cargo-watch": "cargo watch -c -w src -x run",
+    "wasm-pack": "wasm-pack build --target web",
+    "wasm-watch": "cargo watch -c -w src -s \"npm run wasm-pack -- --dev\""
+  },
+  "devDependencies": {
+    "typescript": "^4.6.4",
+    "vite": "^3.2.3"
+  }
+}

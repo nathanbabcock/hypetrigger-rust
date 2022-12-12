@@ -1,0 +1,5 @@
+# Hypetrigger ⚡
+
+## TODO
+
+- [ ] Write README
