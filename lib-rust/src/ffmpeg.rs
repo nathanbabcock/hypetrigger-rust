@@ -145,7 +145,7 @@ pub fn spawn_ffmpeg_childprocess(
 }
 
 /// Callback for each line of FFMPEG stderr
-pub type OnFfmpegStderr = fn(Result<String, Error>);
+pub type OnFfmpegStderr = Arc<dyn Fn(Result<String, Error>) + Send + Sync>;
 
 /// Optional thread to process stderr from ffmpeg. It will automatically terminate
 /// when the ffmpeg process exits.
@@ -164,8 +164,9 @@ pub fn spawn_ffmpeg_stderr_thread(
     thread::Builder::new()
         .name("ffmpeg_stderr".into())
         .spawn(move || {
-            let err = BufReader::new(stderr);
-            err.lines().for_each(on_ffmpeg_stderr);
+            BufReader::new(stderr)
+                .lines()
+                .for_each(|line| (on_ffmpeg_stderr)(line));
             if logging.debug_thread_exit {
                 println!("[ffmpeg.stderr] done; thread exiting");
             }
@@ -223,7 +224,7 @@ pub fn spawn_ffmpeg_stdout_thread(
                     config.clone(),
                     cur_trigger.clone(),
                     raw_image_data,
-                    get_runner,
+                    get_runner.clone(),
                 );
 
                 cur_frame += 1;
@@ -235,8 +236,9 @@ pub fn spawn_ffmpeg_stdout_thread(
         })
 }
 
-pub type GetRunner = fn(String) -> WorkerThread;
-pub type OnFfmpegStdout = fn(Arc<HypetriggerConfig>, Arc<dyn Trigger>, RawImageData, GetRunner);
+pub type GetRunner = Arc<dyn (Fn(String) -> WorkerThread) + Sync + Send>;
+pub type OnFfmpegStdout =
+    Arc<dyn Fn(Arc<HypetriggerConfig>, Arc<dyn Trigger>, RawImageData, GetRunner) + Sync + Send>;
 pub fn on_ffmpeg_stdout(
     config: Arc<HypetriggerConfig>,
     cur_trigger: Arc<dyn Trigger>,

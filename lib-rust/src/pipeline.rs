@@ -31,7 +31,7 @@ pub struct Pipeline {
     /// - For custom Runners, it contains whatever metadata you provide in the implementation
     ///
     /// Logs to console by default.
-    #[builder(default = "emit_stdout")]
+    #[builder(default = "Arc::new(emit_stdout)")]
     on_result: OnResult,
 
     /// Callback for each line of FFMPEG stderr
@@ -39,7 +39,7 @@ pub struct Pipeline {
     /// or extracting metadata or progress.
     ///
     /// If `None`, no thread is spawned to listen for FFMPEG stdout.
-    #[builder(default = "Some(on_ffmpeg_stderr)")]
+    #[builder(default = "Some(Arc::new(on_ffmpeg_stderr))")]
     on_ffmpeg_stderr: Option<OnFfmpegStderr>,
 
     /// Callback for each line of FFMPEG stdout.
@@ -47,7 +47,7 @@ pub struct Pipeline {
     ///
     /// The default implementation then forwards this to the appropriate Runner
     /// thread -- not typically changed.
-    #[builder(default = "on_ffmpeg_stdout")]
+    #[builder(default = "Arc::new(on_ffmpeg_stdout)")]
     on_ffmpeg_stdout: OnFfmpegStdout,
 
     // --- Other moduler core behavior ---
@@ -130,7 +130,8 @@ impl Pipeline {
         if let Some(_) = self.runner_threads.get(&name) {
             return;
         }
-        let worker = spawn_runner_thread(name.clone(), self.on_result, runner, config.clone());
+        let worker =
+            spawn_runner_thread(name.clone(), self.on_result.clone(), runner, config.clone());
         self.runner_threads.insert(name, worker);
     }
 
@@ -189,17 +190,17 @@ impl Pipeline {
         let ffmpeg_stdout_thread = (self.spawn_ffmpeg_stdout_thread)(
             ffmpeg_stdout,
             config_arc.clone(),
-            self.on_ffmpeg_stdout,
-            self.get_runner,
+            self.on_ffmpeg_stdout.clone(),
+            self.get_runner.clone(),
         )
         .unwrap();
 
         // ffmpeg stderr
-        let ffmpeg_stderr_thread = if let Some(on_ffmpeg_stderr) = self.on_ffmpeg_stderr {
+        let ffmpeg_stderr_thread = if let Some(on_ffmpeg_stderr) = &self.on_ffmpeg_stderr {
             let thread = (self.spawn_ffmpeg_stderr_thread)(
                 ffmpeg_stderr.unwrap(),
                 self.logging,
-                on_ffmpeg_stderr,
+                on_ffmpeg_stderr.clone(),
             );
             Some(thread.unwrap())
         } else {
@@ -236,7 +237,7 @@ struct HypetriggerJob {
 fn spawn_runner_threads(
     config: &HypetriggerConfig,
     _runners: &HashMap<String, WorkerThread>,
-    _on_result: fn(RunnerResult),
+    _on_result: OnResult,
 ) -> HashMap<String, WorkerThread> {
     let hashmap: HashMap<String, WorkerThread> = HashMap::new();
     // hashmap.extend(runners.into_iter());
