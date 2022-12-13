@@ -24,6 +24,8 @@ pub struct StdioConfig {
     pub stderr: Stdio,
 }
 
+pub type SpawnFfmpegChildprocess =
+    Arc<dyn (Fn(Arc<HypetriggerConfig>, StdioConfig) -> Result<Child, Error>) + Sync + Send>;
 /// Generates and runs an FFMPEG command similar to this one (in the case of two inputs):
 ///
 /// ```
@@ -147,6 +149,11 @@ pub fn spawn_ffmpeg_childprocess(
 /// Callback for each line of FFMPEG stderr
 pub type OnFfmpegStderr = Arc<dyn Fn(Result<String, Error>) + Send + Sync>;
 
+pub type SpawnFfmpegStderrThread = Arc<
+    dyn (Fn(ChildStderr, LoggingConfig, OnFfmpegStderr) -> Result<JoinHandle<()>, Error>)
+        + Sync
+        + Send,
+>;
 /// Optional thread to process stderr from ffmpeg. It will automatically terminate
 /// when the ffmpeg process exits.
 ///
@@ -180,6 +187,17 @@ pub fn on_ffmpeg_stderr(line: Result<String, Error>) {
         Err(error) => eprintln!("{}", error),
     }
 }
+
+pub type SpawnFfmpegStdoutThread = Arc<
+    dyn (Fn(
+            ChildStdout,
+            Arc<HypetriggerConfig>,
+            OnFfmpegStdout,
+            GetRunner,
+        ) -> Result<JoinHandle<()>, Error>)
+        + Sync
+        + Send,
+>;
 
 /// Handles receiving raw pixel data from FFMPEG on the stdout channel
 /// and mapping it to the corresponding trigger config.
@@ -296,37 +314,3 @@ pub fn spawn_ffmpeg_stdin_thread(
             // }
         })
 }
-
-// pub fn _test() {
-//     let config = HypetriggerConfig {
-//         inputPath: "test".into(),
-//         outputPath: "test".into(),
-//         inputWidth: 100,
-//         inputHeight: 100,
-//         samplesPerSecond: 2f64,
-//         triggers: vec![],
-//         saveScreenshots: false,
-//         logging: LoggingConfig::default(),
-//     };
-
-//     let ffmpeg_childprocess = spawn_ffmpeg_childprocess(&config).expect("ffmpeg_childprocess");
-//     let ffmpeg_stdout = ffmpeg_childprocess.stdout.expect("ffmpeg_stdout");
-//     let ffmpeg_stdin = ffmpeg_childprocess.stdin.expect("ffmpeg_stdin");
-
-//     let (tx_tesseract, rx_tesseract) = sync_channel::<RawImageData>(0);
-//     let (tx_tensorflow, rx_tensorflow) = sync_channel::<RawImageData>(0);
-//     let (tx_ffmpeg_stdin, rx_ffmpeg_stdin) = sync_channel::<FfmpegStdinCommand>(0);
-
-//     let runner = HypetriggerRunner {
-//         tx_tesseract,
-//         tx_tensorflow,
-//     };
-
-//     let ffmpeg_stdout_thread =
-//         spawn_ffmpeg_stdout_thread(ffmpeg_stdout, config.clone(), Box::new(runner))
-//             .expect("ffmpeg_stdout_thread");
-
-//     let ffmpeg_stdin_thread = spawn_ffmpeg_stdin_thread(ffmpeg_stdin, rx_ffmpeg_stdin);
-
-//     // let ffmpeg_stderr_thread = ...
-// }

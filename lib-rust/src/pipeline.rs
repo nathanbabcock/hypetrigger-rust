@@ -11,7 +11,8 @@ use crate::{
     emit::{emit_stdout, OnEmit},
     ffmpeg::{
         on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
-        spawn_ffmpeg_stdout_thread, GetRunner, OnFfmpegStderr, OnFfmpegStdout, StdioConfig,
+        spawn_ffmpeg_stdout_thread, GetRunner, OnFfmpegStderr, OnFfmpegStdout,
+        SpawnFfmpegChildprocess, SpawnFfmpegStderrThread, SpawnFfmpegStdoutThread, StdioConfig,
     },
     logging::LoggingConfig,
     runner::{spawn_runner_thread, RunnerFn, RunnerResult, WorkerThread},
@@ -51,29 +52,19 @@ pub struct Pipeline {
     on_ffmpeg_stdout: OnFfmpegStdout,
 
     // --- Other moduler core behavior ---
-    #[builder(default = "spawn_ffmpeg_childprocess")]
-    spawn_ffmpeg_childprocess: fn(Arc<HypetriggerConfig>, StdioConfig) -> Result<Child, Error>,
+    #[builder(default = "Arc::new(spawn_ffmpeg_childprocess)")]
+    spawn_ffmpeg_childprocess: SpawnFfmpegChildprocess,
 
-    #[builder(default = "spawn_ffmpeg_stderr_thread")]
-    spawn_ffmpeg_stderr_thread:
-        fn(ChildStderr, LoggingConfig, OnFfmpegStderr) -> Result<JoinHandle<()>, Error>,
+    #[builder(default = "Arc::new(spawn_ffmpeg_stderr_thread)")]
+    spawn_ffmpeg_stderr_thread: SpawnFfmpegStderrThread,
 
-    #[builder(default = "spawn_ffmpeg_stdout_thread")]
-    spawn_ffmpeg_stdout_thread: fn(
-        ChildStdout,
-        Arc<HypetriggerConfig>,
-        OnFfmpegStdout,
-        GetRunner,
-    ) -> Result<JoinHandle<()>, Error>,
+    #[builder(default = "Arc::new(spawn_ffmpeg_stdout_thread)")]
+    spawn_ffmpeg_stdout_thread: SpawnFfmpegStdoutThread,
 
-    get_runner: GetRunner,
+    get_runner: GetRunner, // ❗ where is the default for this callback? Is it missing?
 
-    #[builder(default = "spawn_runner_threads")]
-    spawn_runner_threads: fn(
-        &HypetriggerConfig,
-        &HashMap<String, WorkerThread>,
-        OnEmit,
-    ) -> HashMap<String, WorkerThread>,
+    #[builder(default = "Arc::new(spawn_runner_threads)")]
+    spawn_runner_threads: SpawnRunnerThreads,
 
     // --- Pipeline config parameters ---
     #[builder(default = "LoggingConfig::default()")]
@@ -230,6 +221,16 @@ struct HypetriggerJob {
     pub ffmpeg_stdout_thread: JoinHandle<()>,
     pub config: Arc<HypetriggerConfig>,
 }
+
+pub type SpawnRunnerThreads = Arc<
+    dyn (Fn(
+            &HypetriggerConfig,
+            &HashMap<String, WorkerThread>,
+            OnEmit,
+        ) -> HashMap<String, WorkerThread>)
+        + Send
+        + Sync,
+>;
 
 /// Spawns the default runners: Tensorflow and Tesseract
 /// Source is in pipeline.rs rather than runner.rs to hopefully avoid
