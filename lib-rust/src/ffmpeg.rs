@@ -149,11 +149,11 @@ pub fn spawn_ffmpeg_childprocess(
 }
 
 /// Callback for each line of FFMPEG stderr
-pub type OnFfmpegStderr = Arc<dyn Fn(Result<String, Error>) + Send + Sync>;
+pub type OnFfmpegStderr = Option<Arc<dyn Fn(Result<String, Error>) + Send + Sync>>;
 
 /// Function signature for spawning a thread to process ffmpeg stderr
 pub type SpawnFfmpegStderrThread = Arc<
-    dyn (Fn(ChildStderr, LoggingConfig, OnFfmpegStderr) -> Result<JoinHandle<()>, Error>)
+    dyn (Fn(ChildStderr, LoggingConfig, OnFfmpegStderr) -> Option<Result<JoinHandle<()>, Error>>)
         + Sync
         + Send,
 >;
@@ -165,23 +165,31 @@ pub type SpawnFfmpegStderrThread = Arc<
 /// We pipe these and read them async to extract info like video duration,
 /// or re-routing ffmpeg logs to println.
 ///
+/// If no callback is provided, the thread won't be spawned.
+///
 /// - Recieves: lines from ffmpeg stderr
 /// - Sends: Nothing/calls callback on each line
 pub fn spawn_ffmpeg_stderr_thread(
     stderr: ChildStderr,
     logging: LoggingConfig,
     on_ffmpeg_stderr: OnFfmpegStderr,
-) -> Result<JoinHandle<()>, Error> {
-    thread::Builder::new()
-        .name("ffmpeg_stderr".into())
-        .spawn(move || {
-            BufReader::new(stderr)
-                .lines()
-                .for_each(|line| (on_ffmpeg_stderr)(line));
-            if logging.debug_thread_exit {
-                println!("[ffmpeg.stderr] done; thread exiting");
-            }
-        })
+) -> Option<Result<JoinHandle<()>, Error>> {
+    if let Some(on_ffmpeg_stderr) = on_ffmpeg_stderr {
+        Some(
+            thread::Builder::new()
+                .name("ffmpeg_stderr".into())
+                .spawn(move || {
+                    BufReader::new(stderr)
+                        .lines()
+                        .for_each(|line| (on_ffmpeg_stderr)(line));
+                    if logging.debug_thread_exit {
+                        println!("[ffmpeg.stderr] done; thread exiting");
+                    }
+                }),
+        )
+    } else {
+        None // by default, if nothing will be done with the stderr, don't spawn a thread
+    }
 }
 
 /// Callback for every line of ffmpeg stderr

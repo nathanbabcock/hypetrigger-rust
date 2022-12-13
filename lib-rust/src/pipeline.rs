@@ -50,7 +50,7 @@ pub struct Pipeline {
     ///
     /// If `None`, no thread is spawned to listen for FFMPEG stdout.
     #[builder(default = "Some(Arc::new(on_ffmpeg_stderr))")]
-    on_ffmpeg_stderr: Option<OnFfmpegStderr>,
+    on_ffmpeg_stderr: OnFfmpegStderr,
 
     /// Callback for each line of FFMPEG stdout.
     /// It includes the image pixels as `RawImageData`, and corresponding `Trigger`.
@@ -181,10 +181,12 @@ impl Pipeline {
             ffmpeg_stdio,
             self.ffmpeg_exe.clone(),
         )
-        .unwrap();
+        .expect("spawn ffmpeg childprocess");
         let ffmpeg_stdin = Mutex::new(ffmpeg_childprocess.stdin);
         let ffmpeg_stderr = ffmpeg_childprocess.stderr;
-        let ffmpeg_stdout = ffmpeg_childprocess.stdout.unwrap();
+        let ffmpeg_stdout = ffmpeg_childprocess
+            .stdout
+            .expect("obtain ffmpeg stdout channel");
 
         // ffmpeg stdout
         let ffmpeg_stdout_thread = (self.spawn_ffmpeg_stdout_thread)(
@@ -193,16 +195,15 @@ impl Pipeline {
             self.on_ffmpeg_stdout.clone(),
             self.get_runner.clone(),
         )
-        .unwrap();
+        .expect("spawn ffmpeg stdout thread");
 
         // ffmpeg stderr
-        let ffmpeg_stderr_thread = if let Some(on_ffmpeg_stderr) = &self.on_ffmpeg_stderr {
-            let thread = (self.spawn_ffmpeg_stderr_thread)(
-                ffmpeg_stderr.unwrap(),
-                self.logging,
-                on_ffmpeg_stderr.clone(),
-            );
-            Some(thread.unwrap())
+        let ffmpeg_stderr_thread = if let Some(stderr_result) = (self.spawn_ffmpeg_stderr_thread)(
+            ffmpeg_stderr.unwrap(),
+            self.logging,
+            self.on_ffmpeg_stderr.clone(),
+        ) {
+            Some(stderr_result.expect("spawn ffmpeg stderr thread"))
         } else {
             None
         };
@@ -216,7 +217,9 @@ impl Pipeline {
             ffmpeg_stderr_thread,
             ffmpeg_stdout_thread,
         };
-        self.jobs.insert(job_id, job);
+        self.jobs
+            .insert(job_id, job)
+            .expect("insert job in hashmap");
     }
 }
 
