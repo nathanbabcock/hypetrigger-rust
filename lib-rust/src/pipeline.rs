@@ -23,13 +23,22 @@ use crate::{
 /// FFMPEG -> Tesseract/Tensorflow -> Emit
 #[derive(Builder)]
 pub struct Pipeline {
+    // --- Config params ---
+    /// Path to the FFMPEG executable (defaults to "ffmpeg" command in system PATH)
+    #[builder(default = "\"ffmpeg\".into()")]
+    ffmpeg_exe: String,
+
+    /// Turn on or off different logging channels (ffmpeg, tesseract, tensorflow, etc.)
+    #[builder(default = "LoggingConfig::default()")]
+    logging: LoggingConfig,
+
     // --- Callbacks ---
     /// Callback that runs inside a Runner thread when a result for a frame has
     /// been obtained.
     ///
     /// - For Tesseract, this contains recognized text
     /// - For Tensorflow, this contains the image classification label & confidence
-    /// - For custom Runners, it contains whatever metadata you provide in the implementation
+    /// - For custom Runners, it contains whatever data you pass along in the implementation
     ///
     /// Logs to console by default.
     #[builder(default = "Arc::new(emit_stdout)")]
@@ -44,7 +53,7 @@ pub struct Pipeline {
     on_ffmpeg_stderr: Option<OnFfmpegStderr>,
 
     /// Callback for each line of FFMPEG stdout.
-    /// It includes the `RawImageData` and corresponding `Trigger`.
+    /// It includes the image pixels as `RawImageData`, and corresponding `Trigger`.
     ///
     /// The default implementation then forwards this to the appropriate Runner
     /// thread -- not typically changed.
@@ -65,10 +74,6 @@ pub struct Pipeline {
 
     #[builder(default = "Arc::new(spawn_runner_threads)")]
     spawn_runner_threads: SpawnRunnerThreads,
-
-    // --- Pipeline config parameters ---
-    #[builder(default = "LoggingConfig::default()")]
-    logging: LoggingConfig,
 
     /// Required in order to stop a job by sending commands to ffmpeg via stdin
     #[builder(default = "true")]
@@ -171,8 +176,12 @@ impl Pipeline {
 
         // ffmpeg childprocess
         let ffmpeg_stdio = self.ffmpeg_stdio_config();
-        let ffmpeg_childprocess =
-            (self.spawn_ffmpeg_childprocess)(config_arc.clone(), ffmpeg_stdio).unwrap();
+        let ffmpeg_childprocess = (self.spawn_ffmpeg_childprocess)(
+            config_arc.clone(),
+            ffmpeg_stdio,
+            self.ffmpeg_exe.clone(),
+        )
+        .unwrap();
         let ffmpeg_stdin = Mutex::new(ffmpeg_childprocess.stdin);
         let ffmpeg_stderr = ffmpeg_childprocess.stderr;
         let ffmpeg_stdout = ffmpeg_childprocess.stdout.unwrap();

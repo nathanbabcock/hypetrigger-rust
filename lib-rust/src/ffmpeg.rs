@@ -24,8 +24,9 @@ pub struct StdioConfig {
     pub stderr: Stdio,
 }
 
-pub type SpawnFfmpegChildprocess =
-    Arc<dyn (Fn(Arc<HypetriggerConfig>, StdioConfig) -> Result<Child, Error>) + Sync + Send>;
+pub type SpawnFfmpegChildprocess = Arc<
+    dyn (Fn(Arc<HypetriggerConfig>, StdioConfig, String) -> Result<Child, Error>) + Sync + Send,
+>;
 /// Generates and runs an FFMPEG command similar to this one (in the case of two inputs):
 ///
 /// ```
@@ -59,11 +60,14 @@ pub type SpawnFfmpegChildprocess =
 pub fn spawn_ffmpeg_childprocess(
     config: Arc<HypetriggerConfig>,
     stdio_config: StdioConfig,
+    ffmpeg_exe: String,
 ) -> Result<Child, Error> {
+    // config parameters
     let input_video = config.inputPath.as_str();
     let samples_per_second = config.samplesPerSecond;
     let num_triggers = config.triggers.len();
 
+    // construct filter graph
     let mut filter_complex: String =
         format!("[0:v]fps={},split={}", samples_per_second, num_triggers);
     for i in 0..num_triggers {
@@ -89,17 +93,13 @@ pub fn spawn_ffmpeg_childprocess(
         }
     }
 
-    let ffmpeg_path: PathBuf = std::env::current_exe()
-        .unwrap()
-        .parent()
-        .unwrap()
-        .join("ffmpeg.exe");
-    let ffmpeg_path_str: &str = ffmpeg_path.as_os_str().to_str().to_owned().unwrap();
-
+    // retrieve ffmpeg path
+    let ffmpeg_path_str = ffmpeg_exe.as_str();
     if config.logging.debug_ffmpeg {
         println!("[ffmpeg] exe: {}", ffmpeg_path_str);
     }
 
+    // spawn command
     let mut cmd = Command::new(ffmpeg_path_str);
     cmd.arg("-hwaccel")
         .arg("auto")
@@ -112,6 +112,7 @@ pub fn spawn_ffmpeg_childprocess(
         cmd.arg("-map").arg(format!("[out{}]", i));
     }
 
+    // add arguments
     let child = cmd
         .arg("-vsync")
         .arg("drop")
@@ -128,6 +129,7 @@ pub fn spawn_ffmpeg_childprocess(
         .creation_flags(0x08000000)
         .spawn();
 
+    // debug output
     if config.logging.debug_ffmpeg {
         println!("[ffmpeg] debug command:");
         println!("ffmpeg \\");
