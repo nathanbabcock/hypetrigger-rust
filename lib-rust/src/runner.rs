@@ -1,4 +1,4 @@
-use crate::{config::HypetriggerConfig, emit::OnResult, ffmpeg::RawImageData, trigger::Trigger};
+use crate::{config::HypetriggerConfig, emit::OnEmit, ffmpeg::RawImageData, trigger::Trigger};
 use std::{
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender},
@@ -46,12 +46,12 @@ pub struct RunnerResult {
     pub timestamp: u64,
 }
 
-pub type RunnerFn = fn(Receiver<RunnerCommand>, OnResult, Arc<HypetriggerConfig>);
+pub type RunnerFn = fn(Receiver<RunnerCommand>, OnEmit, Arc<HypetriggerConfig>);
 /// - Receives: either an image to process, or an exit command
 /// - Sends: the recognized text
 pub fn spawn_runner_thread(
     name: String,
-    on_result: OnResult,
+    on_result: OnEmit,
     runner: RunnerFn,
     config: Arc<HypetriggerConfig>,
 ) -> WorkerThread {

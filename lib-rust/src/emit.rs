@@ -10,7 +10,7 @@ use std::{
 
 pub type MessageQueue = Arc<Mutex<Vec<RunnerResult>>>;
 // pub type OnResult = fn(RunnerResult);
-pub type OnResult = Arc<dyn Fn(RunnerResult) + Sync + Send>;
+pub type OnEmit = Arc<dyn Fn(RunnerResult) + Sync + Send>;
 
 pub enum MessageQueueCommand {
     Exit,

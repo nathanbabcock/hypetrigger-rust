@@ -1,6 +1,6 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::OnResult,
+    emit::OnEmit,
     photon::{ensure_minimum_size, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerFn, RunnerResult},
     threshold::threshold_color_distance,
@@ -58,7 +58,7 @@ impl TesseractTrigger {
 /// - Sends: the recognized text
 pub fn tesseract_runner(
     rx: Receiver<RunnerCommand>,
-    on_result: OnResult,
+    on_result: OnEmit,
     _config: Arc<HypetriggerConfig>,
 ) {
     let tesseract = RefCell::new(Some(init_tesseract().unwrap()));

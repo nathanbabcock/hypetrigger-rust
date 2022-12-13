@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     config::HypetriggerConfig,
-    emit::{emit_stdout, OnResult},
+    emit::{emit_stdout, OnEmit},
     ffmpeg::{
         on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
         spawn_ffmpeg_stdout_thread, GetRunner, OnFfmpegStderr, OnFfmpegStdout, StdioConfig,
@@ -32,7 +32,7 @@ pub struct Pipeline {
     ///
     /// Logs to console by default.
     #[builder(default = "Arc::new(emit_stdout)")]
-    on_result: OnResult,
+    on_emit: OnEmit,
 
     /// Callback for each line of FFMPEG stderr
     /// Useful for redirecting logs to program stdout or elsewhere,
@@ -72,7 +72,7 @@ pub struct Pipeline {
     spawn_runner_threads: fn(
         &HypetriggerConfig,
         &HashMap<String, WorkerThread>,
-        OnResult,
+        OnEmit,
     ) -> HashMap<String, WorkerThread>,
 
     // --- Pipeline config parameters ---
@@ -131,7 +131,7 @@ impl Pipeline {
             return;
         }
         let worker =
-            spawn_runner_thread(name.clone(), self.on_result.clone(), runner, config.clone());
+            spawn_runner_thread(name.clone(), self.on_emit.clone(), runner, config.clone());
         self.runner_threads.insert(name, worker);
     }
 
@@ -237,7 +237,7 @@ struct HypetriggerJob {
 fn spawn_runner_threads(
     config: &HypetriggerConfig,
     _runners: &HashMap<String, WorkerThread>,
-    _on_result: OnResult,
+    _on_result: OnEmit,
 ) -> HashMap<String, WorkerThread> {
     let hashmap: HashMap<String, WorkerThread> = HashMap::new();
     // hashmap.extend(runners.into_iter());

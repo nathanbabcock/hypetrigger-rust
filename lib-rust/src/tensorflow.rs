@@ -1,6 +1,6 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::OnResult,
+    emit::OnEmit,
     photon::{ensure_size, ensure_square, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerFn, RunnerResult},
     trigger::{Crop, Triggers},
@@ -61,7 +61,7 @@ impl TensorflowTrigger {
 /// - Sends: the image classification label from Tensorflow
 pub fn tensorflow_runner(
     rx: Receiver<RunnerCommand>,
-    on_result: OnResult,
+    on_result: OnEmit,
     config: Arc<HypetriggerConfig>,
 ) {
     let saved_models: ModelMap = init_tensorflow(&config.triggers);
