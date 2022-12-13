@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::Error,
+    io::{Error, Write},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio},
     sync::{Arc, Mutex},
     thread::JoinHandle,
@@ -17,6 +17,8 @@ use crate::{
     logging::LoggingConfig,
     runner::{spawn_runner_thread, RunnerFn, RunnerResult, WorkerThread},
 };
+
+pub type Jobs = HashMap<String, HypetriggerJob>;
 
 /// A multithreaded pipeline of execution
 ///
@@ -98,7 +100,7 @@ pub struct Pipeline {
     /// Each job will have its own instance of FFMPEG,
     /// but will share runner threads.
     #[builder(setter(skip))]
-    jobs: HashMap<String, HypetriggerJob>,
+    jobs: Jobs,
 }
 
 impl PipelineBuilder {
@@ -220,6 +222,31 @@ impl Pipeline {
         self.jobs
             .insert(job_id, job)
             .expect("insert job in hashmap");
+    }
+
+    pub fn stop_job(&mut self, job_id: String) {
+        let job = self.jobs.remove(&job_id).expect("remove job from hashmap");
+        let ffmpeg_stdin = job.ffmpeg_stdin.lock().unwrap();
+        ffmpeg_stdin
+            .as_ref()
+            .expect("obtain ffmpeg stdin channel")
+            .write_all(b"q\n")
+            .expect("send quit signal");
+
+        // join threads to block until job is definitely finished
+        job.ffmpeg_stdout_thread
+            .join()
+            .expect("join ffmpeg stdout thread");
+        if let Some(stderr_thread) = job.ffmpeg_stderr_thread {
+            stderr_thread.join().expect("join ffmpeg stderr thread");
+        }
+    }
+
+    pub fn stop_all_jobs(&mut self) {
+        let keys = self.jobs.keys().cloned().collect::<Vec<_>>();
+        for key in keys {
+            self.stop_job(key);
+        }
     }
 }
 
