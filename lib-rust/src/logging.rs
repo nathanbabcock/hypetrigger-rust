@@ -17,6 +17,9 @@ pub struct LoggingConfig {
 
     //// print message when each thread terminates
     pub debug_thread_exit: bool,
+
+    /// redirect ffmpeg metadata and progress logs to stdout
+    pub log_ffmpeg_stderr: bool,
 }
 
 impl LoggingConfig {
@@ -30,6 +33,7 @@ impl LoggingConfig {
             debug_ffmpeg: false,
             debug_buffer_allocation: false,
             debug_buffer_transfer: false,
+            log_ffmpeg_stderr: false,
         }
     }
 }

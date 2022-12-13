@@ -151,11 +151,13 @@ pub fn spawn_ffmpeg_childprocess(
 /// Callback for each line of FFMPEG stderr
 pub type OnFfmpegStderr = Arc<dyn Fn(Result<String, Error>) + Send + Sync>;
 
+/// Function signature for spawning a thread to process ffmpeg stderr
 pub type SpawnFfmpegStderrThread = Arc<
     dyn (Fn(ChildStderr, LoggingConfig, OnFfmpegStderr) -> Result<JoinHandle<()>, Error>)
         + Sync
         + Send,
 >;
+
 /// Optional thread to process stderr from ffmpeg. It will automatically terminate
 /// when the ffmpeg process exits.
 ///
