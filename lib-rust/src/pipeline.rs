@@ -242,11 +242,12 @@ impl Pipeline {
         }
     }
 
-    pub fn stop_all_jobs(&mut self) {
+    pub fn stop_all_jobs(&mut self) -> Result<(), String> {
         let keys = self.jobs.keys().cloned().collect::<Vec<_>>();
         for key in keys {
             self.stop_job(key);
         }
+        Ok(())
     }
 }
 
