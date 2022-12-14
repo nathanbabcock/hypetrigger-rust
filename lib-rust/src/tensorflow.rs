@@ -111,7 +111,7 @@ pub fn init_tensorflow(triggers: &Triggers) -> ModelMap {
         let tensorflow_params = trigger
             .params
             .as_any()
-            .downcast_ref::<Arc<TensorflowParams>>()
+            .downcast_ref::<TensorflowParams>()
             .unwrap();
 
         let saved_model_path: PathBuf = current_exe()

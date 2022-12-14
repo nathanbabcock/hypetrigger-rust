@@ -100,12 +100,12 @@ pub struct Pipeline {
     /// Tracks the currently running Jobs.
     /// Each job will have its own instance of FFMPEG,
     /// but will share runner threads.
-    #[builder(setter(skip))]
+    #[builder(setter(skip), default = "HashMap::new()")]
     jobs: Jobs,
 }
 
 impl PipelineBuilder {
-    pub fn register_runner(&mut self, name: String, runner: RunnerFn) {
+    pub fn register_runner(&mut self, name: String, runner: RunnerFn) -> &mut Self {
         match self.runners {
             Some(ref mut hashmap) => hashmap.insert(name, runner),
             None => {
@@ -113,6 +113,7 @@ impl PipelineBuilder {
                 return self.register_runner(name, runner);
             }
         };
+        self
     }
 }
 
@@ -133,9 +134,16 @@ impl Pipeline {
         {
             return;
         }
-        let runner = *self.runners.get(&name).unwrap();
-        let worker =
-            spawn_runner_thread(name.clone(), self.on_emit.clone(), runner, config.clone());
+        let runner_fn = *self
+            .runners
+            .get(&name)
+            .expect(format!("get runner fn for {}", name).as_str());
+        let worker = spawn_runner_thread(
+            name.clone(),
+            self.on_emit.clone(),
+            runner_fn,
+            config.clone(),
+        );
         self.runner_threads
             .write()
             .expect("acquire runner threads write lock")
@@ -247,9 +255,8 @@ impl Pipeline {
             ffmpeg_stderr_thread,
             ffmpeg_stdout_thread,
         };
-        self.jobs
-            .insert(job_id, job)
-            .expect("insert job in hashmap");
+
+        self.jobs.insert(job_id, job);
 
         Ok(())
     }

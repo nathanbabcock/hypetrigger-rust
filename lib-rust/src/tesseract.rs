@@ -56,8 +56,8 @@ pub fn tesseract_runner(
                 let params = trigger
                     .params
                     .as_any()
-                    .downcast_ref::<Arc<TesseractParams>>()
-                    .unwrap();
+                    .downcast_ref::<TesseractParams>()
+                    .expect("downcast to TesseractParams");
 
                 // 1. convert raw image to photon
                 let vector = Arc::try_unwrap(payload.image).expect("unwrap buffer");
