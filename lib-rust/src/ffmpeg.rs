@@ -76,10 +76,10 @@ pub fn spawn_ffmpeg_childprocess(
     filter_complex.push(';');
     for i in 0..num_triggers {
         let trigger = &config.triggers[i];
-        let in_w = trigger.get_crop().widthPercent / 100.0;
-        let in_h = trigger.get_crop().heightPercent / 100.0;
-        let x = trigger.get_crop().xPercent / 100.0;
-        let y = trigger.get_crop().yPercent / 100.0;
+        let in_w = trigger.crop.widthPercent / 100.0;
+        let in_h = trigger.crop.heightPercent / 100.0;
+        let x = trigger.crop.xPercent / 100.0;
+        let y = trigger.crop.yPercent / 100.0;
 
         filter_complex.push_str(
             format!(
@@ -225,15 +225,14 @@ pub fn spawn_ffmpeg_stdout_thread(
             // Init buffers
             let mut buffers: Vec<Vec<u8>> = Vec::new();
             for trigger in &config.triggers {
-                let width = trigger.get_crop().width;
-                let height = trigger.get_crop().height;
+                let width = trigger.crop.width;
+                let height = trigger.crop.height;
                 const CHANNELS: u32 = 3;
                 let buf_size = (width * height * CHANNELS) as usize;
-                if trigger.get_debug() && config.logging.debug_buffer_allocation {
+                if trigger.debug && config.logging.debug_buffer_allocation {
                     println!(
                         "[rust] Allocated buffer of size {} for trigger id {}",
-                        buf_size,
-                        trigger.get_id()
+                        buf_size, trigger.id,
                     );
                 }
                 buffers.push(vec![0_u8; buf_size]);
@@ -267,12 +266,11 @@ pub fn spawn_ffmpeg_stdout_thread(
 }
 
 pub type GetRunnerThread = Arc<dyn (Fn(String) -> Arc<WorkerThread>) + Sync + Send>;
-pub type OnFfmpegStdout = Arc<
-    dyn Fn(Arc<HypetriggerConfig>, Arc<dyn Trigger>, RawImageData, GetRunnerThread) + Sync + Send,
->;
+pub type OnFfmpegStdout =
+    Arc<dyn Fn(Arc<HypetriggerConfig>, Arc<Trigger>, RawImageData, GetRunnerThread) + Sync + Send>;
 pub fn on_ffmpeg_stdout(
     config: Arc<HypetriggerConfig>,
-    cur_trigger: Arc<dyn Trigger>,
+    cur_trigger: Arc<Trigger>,
     raw_image_data: RawImageData,
     get_runner: GetRunnerThread,
 ) {
@@ -285,7 +283,7 @@ pub fn on_ffmpeg_stdout(
     //     );
     // }
 
-    let tx_name = &cur_trigger.get_runner_type();
+    let tx_name = &cur_trigger.params.get_runner_type();
     let tx = get_runner(tx_name.clone()).tx.clone();
 
     if config.logging.debug_buffer_transfer {
@@ -293,7 +291,7 @@ pub fn on_ffmpeg_stdout(
             "[ffmpeg] sending {} bytes to {} for trigger {}",
             raw_image_data.len(),
             tx_name,
-            cur_trigger.get_id(),
+            cur_trigger.id,
         );
     }
 

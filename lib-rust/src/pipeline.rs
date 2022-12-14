@@ -16,6 +16,8 @@ use crate::{
     },
     logging::LoggingConfig,
     runner::{spawn_runner_thread, RunnerFn, RunnerResult, WorkerThread},
+    tensorflow::TENSORFLOW_RUNNER,
+    tesseract::TESSERACT_RUNNER,
 };
 
 pub type Jobs = HashMap<String, HypetriggerJob>;
@@ -152,7 +154,7 @@ impl Pipeline {
     /// Spawns only the runners needed for a given job.
     pub fn spawn_runners_for_config(&mut self, config: Arc<HypetriggerConfig>) {
         for trigger in &config.triggers {
-            self.spawn_runner(trigger.get_runner_type().clone(), config.clone());
+            self.spawn_runner(trigger.params.get_runner_type().clone(), config.clone());
         }
     }
 
@@ -312,17 +314,17 @@ fn spawn_runner_threads(
     // hashmap.extend(runners.into_iter());
     // TODO !!! IMPORTANT runners.clone()
     for trigger in &config.triggers {
-        if hashmap.contains_key(trigger.get_runner_type().as_str()) {
+        if hashmap.contains_key(trigger.params.get_runner_type().as_str()) {
             continue;
         }
-        match trigger.get_runner_type().as_str() {
-            "tensorflow" => {
+        match trigger.params.get_runner_type().as_str() {
+            TENSORFLOW_RUNNER => {
                 //   hashmap.insert(
                 //     "tensorflow".into(),
                 //     spawn_tensorflow_thread(config.clone(), self.on_result),
                 // )
             }
-            "tesseract" => {
+            TESSERACT_RUNNER => {
                 // hashmap.insert("tesseract".into(), spawn_tesseract_thread(self.on_result))
             }
             unknown => panic!("Unknown runner type: {}", unknown),

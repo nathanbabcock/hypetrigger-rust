@@ -20,7 +20,7 @@ pub struct WorkerThread {
 pub struct ProcessImagePayload {
     pub input_id: String,
     pub image: RawImageData,
-    pub trigger: Arc<dyn Trigger>,
+    pub trigger: Arc<Trigger>,
     // pub trigger_id: String,
     // pub width: u32,
     // pub height: u32,

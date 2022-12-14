@@ -3,7 +3,7 @@ use crate::{
     emit::OnEmit,
     photon::{ensure_size, ensure_square, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerFn, RunnerResult},
-    trigger::{Crop, Triggers},
+    trigger::{self, Crop, Trigger, TriggerParams, Triggers},
 };
 use photon_rs::PhotonImage;
 use std::{
@@ -22,38 +22,18 @@ pub const TENSOR_SIZE: u64 = 224;
 /// Color channels expected (RGB)
 pub const TENSOR_CHANNELS: u64 = 3;
 
+/// The key in the hashmap of Runners, used to map Triggers to their Runners
+pub const TENSORFLOW_RUNNER: &str = "tensorflow";
+
 pub type ModelMap = HashMap<String, (SavedModelBundle, Graph)>;
 
-pub struct TensorflowTrigger {
-    pub crop: Crop,
-    pub id: String,
+pub struct TensorflowParams {
     pub model_dir: String,
-    pub debug: bool,
 }
 
-impl TensorflowTrigger {
-    pub fn get_debug(&self) -> bool {
-        self.debug
-    }
-
-    pub fn get_model_dir(&self) -> String {
-        self.model_dir.clone()
-    }
-
-    pub fn get_crop(&self) -> Crop {
-        self.crop.clone()
-    }
-
-    pub fn get_id(&self) -> String {
-        self.id.clone()
-    }
-
-    pub fn get_runner_type() -> String {
-        "tensorflow".into()
-    }
-
-    pub fn runner() -> RunnerFn {
-        tensorflow_runner
+impl TriggerParams for TensorflowParams {
+    fn get_runner_type(&self) -> String {
+        TENSORFLOW_RUNNER.into()
     }
 }
 
@@ -70,12 +50,7 @@ pub fn tensorflow_runner(
     while let Ok(command) = rx.recv() {
         match command {
             RunnerCommand::ProcessImage(payload) => {
-                //-1. Downcast trigger
-                let trigger = payload
-                    .trigger
-                    .as_any()
-                    .downcast_ref::<Arc<TensorflowTrigger>>()
-                    .unwrap();
+                let trigger = payload.trigger;
 
                 // 0. Get corresponding model
                 let (bundle, graph) = saved_models.get(&trigger.id).expect("get model");
@@ -128,25 +103,29 @@ pub fn tensorflow_runner(
 pub fn init_tensorflow(triggers: &Triggers) -> ModelMap {
     let mut saved_models: ModelMap = HashMap::new();
     for trigger in triggers {
-        if trigger.get_runner_type() != TensorflowTrigger::get_runner_type() {
-            continue; // also warn?
+        if trigger.params.get_runner_type() != TENSORFLOW_RUNNER {
+            eprintln!("trigger {} is not a tensorflow trigger", trigger.id);
+            continue;
         }
 
-        let tensorflow_trigger = trigger
+        let tensorflow_params = trigger
+            .params
             .as_any()
-            .downcast_ref::<TensorflowTrigger>()
+            .downcast_ref::<Arc<TensorflowParams>>()
             .unwrap();
 
-        let model_dir = tensorflow_trigger.get_model_dir();
-
-        let saved_model_path: PathBuf = current_exe().unwrap().parent().unwrap().join(model_dir);
+        let saved_model_path: PathBuf = current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(tensorflow_params.model_dir.clone());
         let save_model_path_str: &str = saved_model_path.as_os_str().to_str().to_owned().unwrap();
 
         // todo!("logging config");
         println!("[tensorflow] saved model path = {}", save_model_path_str);
 
         saved_models.insert(
-            trigger.get_id().to_string(),
+            trigger.id.clone(),
             load_tensorflow_model(save_model_path_str),
         );
     }

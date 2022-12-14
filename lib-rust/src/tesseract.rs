@@ -4,7 +4,7 @@ use crate::{
     photon::{ensure_minimum_size, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerFn, RunnerResult},
     threshold::threshold_color_distance,
-    trigger::Crop,
+    trigger::{Crop, Trigger, TriggerParams},
 };
 use photon_rs::{transform::padding_uniform, PhotonImage, Rgb, Rgba};
 use std::{
@@ -16,12 +16,8 @@ use std::{
 use tesseract::{InitializeError, Tesseract};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-pub struct TesseractTrigger {
-    pub id: String,
-    pub debug: bool,
-    pub crop: Crop,
-    pub filter: Option<ThresholdFilter>,
-}
+/// The key in the hashmap of Runners, used to map Triggers to their Runners
+pub const TESSERACT_RUNNER: &str = "tesseract";
 
 #[derive(Clone, Debug)]
 #[wasm_bindgen]
@@ -32,25 +28,13 @@ pub struct ThresholdFilter {
     pub threshold: f64,
 }
 
-impl TesseractTrigger {
-    pub fn get_debug(&self) -> bool {
-        self.debug
-    }
+pub struct TesseractParams {
+    pub filter: Option<ThresholdFilter>,
+}
 
-    pub fn get_crop(&self) -> Crop {
-        self.crop.clone()
-    }
-
-    pub fn get_id(&self) -> String {
-        self.id.clone()
-    }
-
-    pub fn get_runner_type() -> String {
-        "tesseract".into()
-    }
-
-    pub fn runner() -> RunnerFn {
-        tesseract_runner
+impl TriggerParams for TesseractParams {
+    fn get_runner_type(&self) -> String {
+        TESSERACT_RUNNER.into()
     }
 }
 
@@ -67,10 +51,12 @@ pub fn tesseract_runner(
     while let Ok(command) = rx.recv() {
         match command {
             RunnerCommand::ProcessImage(payload) => {
-                let trigger = payload
-                    .trigger
+                let trigger = payload.trigger;
+
+                let params = trigger
+                    .params
                     .as_any()
-                    .downcast_ref::<Arc<TesseractTrigger>>()
+                    .downcast_ref::<Arc<TesseractParams>>()
                     .unwrap();
 
                 // 1. convert raw image to photon
@@ -79,7 +65,7 @@ pub fn tesseract_runner(
                 let image = PhotonImage::new(rgba32, trigger.crop.width, trigger.crop.height);
 
                 // 2. preprocess
-                let filtered = preprocess_image_for_tesseract(&image, trigger.filter.clone());
+                let filtered = preprocess_image_for_tesseract(&image, params.filter.clone());
 
                 // 3. run ocr
                 let text = ocr(filtered, &tesseract, Some(trigger.id.clone()));

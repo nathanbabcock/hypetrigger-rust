@@ -2,30 +2,28 @@ use std::sync::Arc;
 
 use crate::{any::AsAny, runner::RunnerFn};
 
-pub type Triggers = Vec<Arc<dyn Trigger>>;
+pub type Triggers = Vec<Arc<Trigger>>;
 
 /// A **Trigger** defines a specific method of interpreting a video frame.
 ///
 /// Concrete implementations do the following:
 /// - specify a cropped rectangle of the frame to analyze
 /// - run custom code to interpret the image data (the associated `runner` function)
-pub trait Trigger: AsAny + Send + Sync {
-    /// what region of the video to detect events in
-    fn get_crop(&self) -> Crop;
+pub struct Trigger {
+    pub id: String,
+    pub crop: Crop,
+    pub debug: bool,
 
-    /// a unique identifier for this trigger *instance*
-    /// Note: this is different than `Trigger::get_runner_type`
-    fn get_id(&self) -> String;
+    /// Additional parameters that are speficic to this variety of Trigger
+    /// - For **Tesseract**, it would be the threshold filter settings
+    /// - For **Tensorflow**, it would be the model directory
+    /// - For **custom Triggers**, it is a user-defined struct that extends `TriggerParams`
+    pub params: Arc<dyn TriggerParams>,
+}
 
-    /// Enable debugging for this trigger, printing extra logs and saving
-    /// intermediate snapshots to disk
-    fn get_debug(&self) -> bool;
-
-    /// Handles running triggers of this type, invoked in a separate thread.
-    /// Note: returns a function pointer
-    fn runner(&self) -> RunnerFn;
-
-    /// a unique identifier used to map it to the correct Runner thread
+/// Parameters to defined specific behavior for a type of Trigger
+pub trait TriggerParams: AsAny + Send + Sync {
+    /// The key used in the HashMap of Runners, used to match it with this Trigger
     fn get_runner_type(&self) -> String;
 }
 
