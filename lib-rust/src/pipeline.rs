@@ -180,9 +180,18 @@ impl Pipeline {
     }
 
     /// Spawns an instance of FFMPEG, listens on stdio channels, and forwards decoded images to the appropriate Runner.
-    pub fn start_job(&mut self, job_id: String, config: HypetriggerConfig) {
+    pub fn start_job(&mut self, job_id: String, config: HypetriggerConfig) -> Result<(), String> {
         let config_arc = Arc::new(config);
 
+        // validate job
+        if self.jobs.contains_key(&job_id) {
+            return Err(format!("job already exists with id {}", job_id));
+        }
+        if config_arc.triggers.len() == 0 {
+            return Err("job contains no triggers".into());
+        }
+
+        // get runners
         let runner_threads_clone = self.runner_threads.clone();
         let get_runner_thread: GetRunnerThread = Arc::new(move |name| -> Arc<WorkerThread> {
             runner_threads_clone
@@ -239,6 +248,8 @@ impl Pipeline {
         self.jobs
             .insert(job_id, job)
             .expect("insert job in hashmap");
+
+        Ok(())
     }
 
     pub fn stop_job(&mut self, job_id: String) {
