@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     io::{Error, Write},
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     thread::JoinHandle,
 };
 
@@ -11,7 +11,7 @@ use crate::{
     emit::{emit_stdout, OnEmit},
     ffmpeg::{
         on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
-        spawn_ffmpeg_stdout_thread, GetRunner, OnFfmpegStderr, OnFfmpegStdout,
+        spawn_ffmpeg_stdout_thread, GetRunnerThread, OnFfmpegStderr, OnFfmpegStdout,
         SpawnFfmpegChildprocess, SpawnFfmpegStderrThread, SpawnFfmpegStdoutThread, StdioConfig,
     },
     logging::LoggingConfig,
@@ -19,6 +19,7 @@ use crate::{
 };
 
 pub type Jobs = HashMap<String, HypetriggerJob>;
+pub type RunnerThreads = Arc<RwLock<HashMap<String, Arc<WorkerThread>>>>;
 
 /// A multithreaded pipeline of execution
 ///
@@ -72,8 +73,6 @@ pub struct Pipeline {
     #[builder(default = "Arc::new(spawn_ffmpeg_stdout_thread)")]
     spawn_ffmpeg_stdout_thread: SpawnFfmpegStdoutThread,
 
-    get_runner: GetRunner, // ❗ where is the default for this callback? Is it missing?
-
     #[builder(default = "Arc::new(spawn_runner_threads)")]
     spawn_runner_threads: SpawnRunnerThreads,
 
@@ -94,7 +93,7 @@ pub struct Pipeline {
     /// This must be kept separate from `Pipeline::runners` because the inner thread
     /// JoinHandles are not cloneable, so can't be used in the Builder.
     #[builder(setter(skip))]
-    runner_threads: HashMap<String, WorkerThread>,
+    runner_threads: RunnerThreads,
 
     /// Tracks the currently running Jobs.
     /// Each job will have its own instance of FFMPEG,
@@ -124,13 +123,21 @@ impl Pipeline {
     /// If a thread for the given Runner already exists, nothing is changed.
     /// Runner must already be registered (e.g. a name mapped to a spawn function)
     pub fn spawn_runner(&mut self, name: String, config: Arc<HypetriggerConfig>) {
-        let runner = *self.runners.get(&name).unwrap();
-        if let Some(_) = self.runner_threads.get(&name) {
+        if let Some(_) = self
+            .runner_threads
+            .read()
+            .expect("acquire runner threads read lock")
+            .get(&name)
+        {
             return;
         }
+        let runner = *self.runners.get(&name).unwrap();
         let worker =
             spawn_runner_thread(name.clone(), self.on_emit.clone(), runner, config.clone());
-        self.runner_threads.insert(name, worker);
+        self.runner_threads
+            .write()
+            .expect("acquire runner threads write lock")
+            .insert(name, Arc::new(worker));
     }
 
     /// Spawns a thread for every registered Runner in the pipeline.
@@ -176,6 +183,16 @@ impl Pipeline {
     pub fn start_job(&mut self, job_id: String, config: HypetriggerConfig) {
         let config_arc = Arc::new(config);
 
+        let runner_threads_clone = self.runner_threads.clone();
+        let get_runner_thread: GetRunnerThread = Arc::new(move |name| -> Arc<WorkerThread> {
+            runner_threads_clone
+                .read()
+                .expect("acquire runner threads read lock")
+                .get(&name)
+                .expect("get runner thread")
+                .clone()
+        });
+
         // ffmpeg childprocess
         let ffmpeg_stdio = self.ffmpeg_stdio_config();
         let ffmpeg_childprocess = (self.spawn_ffmpeg_childprocess)(
@@ -195,7 +212,7 @@ impl Pipeline {
             ffmpeg_stdout,
             config_arc.clone(),
             self.on_ffmpeg_stdout.clone(),
-            self.get_runner.clone(),
+            get_runner_thread.clone(),
         )
         .expect("spawn ffmpeg stdout thread");
 

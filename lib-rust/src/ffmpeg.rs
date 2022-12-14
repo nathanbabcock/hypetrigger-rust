@@ -205,7 +205,7 @@ pub type SpawnFfmpegStdoutThread = Arc<
             ChildStdout,
             Arc<HypetriggerConfig>,
             OnFfmpegStdout,
-            GetRunner,
+            GetRunnerThread,
         ) -> Result<JoinHandle<()>, Error>)
         + Sync
         + Send,
@@ -217,7 +217,7 @@ pub fn spawn_ffmpeg_stdout_thread(
     mut stdout: ChildStdout,
     config: Arc<HypetriggerConfig>,
     on_ffmpeg_stdout: OnFfmpegStdout,
-    get_runner: GetRunner,
+    get_runner: GetRunnerThread,
 ) -> Result<JoinHandle<()>, Error> {
     thread::Builder::new()
         .name("ffmpeg_stdout".into())
@@ -266,14 +266,15 @@ pub fn spawn_ffmpeg_stdout_thread(
         })
 }
 
-pub type GetRunner = Arc<dyn (Fn(String) -> WorkerThread) + Sync + Send>;
-pub type OnFfmpegStdout =
-    Arc<dyn Fn(Arc<HypetriggerConfig>, Arc<dyn Trigger>, RawImageData, GetRunner) + Sync + Send>;
+pub type GetRunnerThread = Arc<dyn (Fn(String) -> Arc<WorkerThread>) + Sync + Send>;
+pub type OnFfmpegStdout = Arc<
+    dyn Fn(Arc<HypetriggerConfig>, Arc<dyn Trigger>, RawImageData, GetRunnerThread) + Sync + Send,
+>;
 pub fn on_ffmpeg_stdout(
     config: Arc<HypetriggerConfig>,
     cur_trigger: Arc<dyn Trigger>,
     raw_image_data: RawImageData,
-    get_runner: GetRunner,
+    get_runner: GetRunnerThread,
 ) {
     // TODO num_triggers went out of scope
     // if config.logging.debug_buffer_transfer {
