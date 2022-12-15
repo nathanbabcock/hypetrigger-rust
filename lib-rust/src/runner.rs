@@ -46,18 +46,26 @@ pub struct RunnerResult {
     pub timestamp: u64,
 }
 
-pub type RunnerFn = fn(Receiver<RunnerCommand>, OnEmit, Arc<HypetriggerConfig>);
+#[derive(Debug)]
+pub struct RunnerResultV2<T> {
+    pub result: T,
+    pub frame_num: u64,
+    pub trigger_id: String,
+    pub input_id: String,
+    pub timestamp: u64,
+}
+
+pub type RunnerFn = fn(Receiver<RunnerCommand>, Arc<HypetriggerConfig>);
 /// - Receives: either an image to process, or an exit command
 /// - Sends: the recognized text
 pub fn spawn_runner_thread(
     name: String,
-    on_result: OnEmit,
     runner: RunnerFn,
     config: Arc<HypetriggerConfig>,
 ) -> WorkerThread {
     let (tx, rx) = sync_channel::<RunnerCommand>(0);
     let join_handle = thread::Builder::new()
         .name(name)
-        .spawn(move || runner(rx, on_result, config.clone()));
+        .spawn(move || runner(rx, config.clone()));
     WorkerThread { tx, join_handle }
 }

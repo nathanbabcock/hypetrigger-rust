@@ -46,8 +46,9 @@ pub struct Pipeline {
     /// - For custom Runners, it contains whatever data you pass along in the implementation
     ///
     /// Logs to console by default.
-    #[builder(default = "Arc::new(emit_stdout)")]
-    on_emit: OnEmit,
+    /// @deprecated
+    // #[builder(default = "Arc::new(emit_stdout)")]
+    // on_emit: OnEmit,
 
     /// Callback for each line of FFMPEG stderr
     /// Useful for redirecting logs to program stdout or elsewhere,
@@ -138,12 +139,7 @@ impl Pipeline {
             .runners
             .get(&name)
             .expect(format!("get runner fn for {}", name).as_str());
-        let worker = spawn_runner_thread(
-            name.clone(),
-            self.on_emit.clone(),
-            runner_fn,
-            config.clone(),
-        );
+        let worker = spawn_runner_thread(name.clone(), runner_fn, config.clone());
         self.runner_threads
             .write()
             .expect("acquire runner threads write lock")

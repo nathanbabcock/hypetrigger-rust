@@ -1,4 +1,4 @@
-use crate::runner::RunnerResult;
+use crate::runner::{RunnerResult, RunnerResultV2};
 use std::{
     io::Error,
     sync::{
@@ -11,6 +11,8 @@ use std::{
 pub type MessageQueue = Arc<Mutex<Vec<RunnerResult>>>;
 // pub type OnResult = fn(RunnerResult);
 pub type OnEmit = Arc<dyn Fn(RunnerResult) + Sync + Send>;
+
+pub type OnEmitV2<T> = Arc<dyn Fn(RunnerResultV2<T>) + Sync + Send>;
 
 pub enum MessageQueueCommand {
     Exit,

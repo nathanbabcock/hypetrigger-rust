@@ -1,8 +1,8 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::OnEmit,
+    emit::{OnEmit, OnEmitV2},
     photon::{ensure_minimum_size, rgb24_to_rgba32},
-    runner::{RunnerCommand, RunnerFn, RunnerResult},
+    runner::{RunnerCommand, RunnerFn, RunnerResult, RunnerResultV2},
     threshold::threshold_color_distance,
     trigger::{Crop, Trigger, TriggerParams},
 };
@@ -29,7 +29,9 @@ pub struct ThresholdFilter {
 }
 
 pub struct TesseractParams {
+    pub crop: Option<Crop>, // we may choose to crop in the runner, instead of in ffmpeg filter
     pub filter: Option<ThresholdFilter>,
+    pub on_emit: OnEmitV2<String>,
 }
 
 impl TriggerParams for TesseractParams {
@@ -71,14 +73,15 @@ pub fn tesseract_runner(
                 let text = ocr(filtered, &tesseract, Some(trigger.id.clone()));
 
                 // 4. forward results to tx
-                let result = RunnerResult {
-                    text,
+                let result = RunnerResultV2 {
+                    result: text,
                     trigger_id: trigger.id.clone(),
                     input_id: payload.input_id.clone(),
                     frame_num: 0, // todo (from Context)
                     timestamp: 0, // todo
                 };
-                on_result(result);
+
+                (params.on_emit)(result);
             }
             RunnerCommand::Exit => {
                 println!("[tesseract] received exit command");

@@ -1,8 +1,8 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::OnEmit,
+    emit::{OnEmit, OnEmitV2},
     photon::{ensure_size, ensure_square, rgb24_to_rgba32},
-    runner::{RunnerCommand, RunnerFn, RunnerResult},
+    runner::{RunnerCommand, RunnerFn, RunnerResult, RunnerResultV2},
     trigger::{self, Crop, Trigger, TriggerParams, Triggers},
 };
 use photon_rs::PhotonImage;
@@ -29,6 +29,8 @@ pub type ModelMap = HashMap<String, (SavedModelBundle, Graph)>;
 
 pub struct TensorflowParams {
     pub model_dir: String,
+    pub crop: Option<Crop>,
+    pub on_emit: OnEmitV2<String>,
 }
 
 impl TriggerParams for TensorflowParams {
@@ -51,6 +53,12 @@ pub fn tensorflow_runner(
         match command {
             RunnerCommand::ProcessImage(payload) => {
                 let trigger = payload.trigger;
+
+                let params = trigger
+                    .params
+                    .as_any()
+                    .downcast_ref::<TensorflowParams>()
+                    .expect("downcast to TesseractParams");
 
                 // 0. Get corresponding model
                 let (bundle, graph) = saved_models.get(&trigger.id).expect("get model");
@@ -83,14 +91,16 @@ pub fn tensorflow_runner(
                 let text: String = prediction.to_string();
 
                 // 4. forward results to tx
-                let result = RunnerResult {
-                    text,
+                let result = RunnerResultV2 {
+                    result: text,
                     trigger_id: trigger.id.clone(),
                     input_id: payload.input_id.clone(),
                     frame_num: 0,
                     timestamp: 0,
                 };
-                on_result(result);
+
+                // 5. emit
+                (params.on_emit)(result);
             }
             RunnerCommand::Exit => {
                 println!("[tensorflow] received exit command");
