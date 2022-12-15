@@ -3,7 +3,7 @@ use crate::{
     emit::{OnEmit, OnEmitV2},
     photon::{ensure_size, ensure_square, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerFn, RunnerResult, RunnerResultV2},
-    trigger::{self, Crop, Trigger, TriggerParams, Triggers},
+    trigger::{self, Crop, Trigger, Triggers},
 };
 use photon_rs::PhotonImage;
 use std::{
@@ -27,41 +27,41 @@ pub const TENSORFLOW_RUNNER: &str = "tensorflow";
 
 pub type ModelMap = HashMap<String, (SavedModelBundle, Graph)>;
 
-pub struct TensorflowParams {
+pub struct TensorflowTrigger {
+    // pub id: String,
+    pub crop: Crop,
     pub model_dir: String,
-    pub crop: Option<Crop>,
     pub on_emit: OnEmitV2<String>,
 }
 
-impl TriggerParams for TensorflowParams {
+impl Trigger for TensorflowTrigger {
     fn get_runner_type(&self) -> String {
         TENSORFLOW_RUNNER.into()
+    }
+
+    fn get_crop(&self) -> Crop {
+        self.crop.clone()
     }
 }
 
 /// - Receives: either an image to process, or an exit command
 /// - Sends: the image classification label from Tensorflow
-pub fn tensorflow_runner(
-    rx: Receiver<RunnerCommand>,
-    on_result: OnEmit,
-    config: Arc<HypetriggerConfig>,
-) {
+pub fn tensorflow_runner(rx: Receiver<RunnerCommand>, config: Arc<HypetriggerConfig>) {
     let saved_models: ModelMap = init_tensorflow(&config.triggers);
     // let mut consecutive_matches = init_consecutive_matches(&context.config.triggers);
 
     while let Ok(command) = rx.recv() {
         match command {
             RunnerCommand::ProcessImage(payload) => {
-                let trigger = payload.trigger;
-
-                let params = trigger
-                    .params
+                // -1. Downcast to concrete Trigger type
+                let trigger = payload
+                    .trigger
                     .as_any()
-                    .downcast_ref::<TensorflowParams>()
-                    .expect("downcast to TesseractParams");
+                    .downcast_ref::<TensorflowTrigger>()
+                    .expect("Tensorflow runner received a non-Tensorflow trigger!");
 
                 // 0. Get corresponding model
-                let (bundle, graph) = saved_models.get(&trigger.id).expect("get model");
+                let (bundle, graph) = saved_models.get(&trigger.model_dir).expect("get model");
 
                 // 1. convert raw image to photon
                 let vector = Arc::try_unwrap(payload.image).expect("unwrap buffer");
@@ -93,14 +93,14 @@ pub fn tensorflow_runner(
                 // 4. forward results to tx
                 let result = RunnerResultV2 {
                     result: text,
-                    trigger_id: trigger.id.clone(),
+                    trigger_id: "".into(), // no longer exists // trigger.id.clone(),
                     input_id: payload.input_id.clone(),
                     frame_num: 0,
                     timestamp: 0,
                 };
 
                 // 5. emit
-                (params.on_emit)(result);
+                (trigger.on_emit)(result);
             }
             RunnerCommand::Exit => {
                 println!("[tensorflow] received exit command");
@@ -113,29 +113,28 @@ pub fn tensorflow_runner(
 pub fn init_tensorflow(triggers: &Triggers) -> ModelMap {
     let mut saved_models: ModelMap = HashMap::new();
     for trigger in triggers {
-        if trigger.params.get_runner_type() != TENSORFLOW_RUNNER {
-            eprintln!("trigger {} is not a tensorflow trigger", trigger.id);
+        if trigger.get_runner_type() != TENSORFLOW_RUNNER {
+            // eprintln!("trigger {} is not a tensorflow trigger", trigger.id);
             continue;
         }
 
-        let tensorflow_params = trigger
-            .params
+        let trigger = trigger
             .as_any()
-            .downcast_ref::<TensorflowParams>()
+            .downcast_ref::<TensorflowTrigger>()
             .unwrap();
 
         let saved_model_path: PathBuf = current_exe()
             .unwrap()
             .parent()
             .unwrap()
-            .join(tensorflow_params.model_dir.clone());
+            .join(trigger.model_dir.clone());
         let save_model_path_str: &str = saved_model_path.as_os_str().to_str().to_owned().unwrap();
 
         // todo!("logging config");
         println!("[tensorflow] saved model path = {}", save_model_path_str);
 
         saved_models.insert(
-            trigger.id.clone(),
+            trigger.model_dir.clone(),
             load_tensorflow_model(save_model_path_str),
         );
     }

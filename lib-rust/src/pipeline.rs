@@ -158,7 +158,7 @@ impl Pipeline {
     /// Spawns only the runners needed for a given job.
     pub fn spawn_runners_for_config(&mut self, config: Arc<HypetriggerConfig>) {
         for trigger in &config.triggers {
-            self.spawn_runner(trigger.params.get_runner_type().clone(), config.clone());
+            self.spawn_runner(trigger.get_runner_type().clone(), config.clone());
         }
     }
 
@@ -317,10 +317,10 @@ fn spawn_runner_threads(
     // hashmap.extend(runners.into_iter());
     // TODO !!! IMPORTANT runners.clone()
     for trigger in &config.triggers {
-        if hashmap.contains_key(trigger.params.get_runner_type().as_str()) {
+        if hashmap.contains_key(trigger.get_runner_type().as_str()) {
             continue;
         }
-        match trigger.params.get_runner_type().as_str() {
+        match trigger.get_runner_type().as_str() {
             TENSORFLOW_RUNNER => {
                 //   hashmap.insert(
                 //     "tensorflow".into(),

@@ -2,29 +2,42 @@ use std::sync::Arc;
 
 use crate::{any::AsAny, runner::RunnerFn};
 
-pub type Triggers = Vec<Arc<Trigger>>;
+pub type Triggers = Vec<Arc<dyn Trigger>>;
 
-/// A **Trigger** defines a specific method of interpreting a video frame.
-///
-/// Concrete implementations do the following:
-/// - specify a cropped rectangle of the frame to analyze
-/// - run custom code to interpret the image data (the associated `runner` function)
-pub struct Trigger {
-    pub id: String,
-    pub crop: Crop,
-    pub debug: bool,
-
-    /// Additional parameters that are speficic to this variety of Trigger
-    /// - For **Tesseract**, it would be the threshold filter settings
-    /// - For **Tensorflow**, it would be the model directory
-    /// - For **custom Triggers**, it is a user-defined struct that extends `TriggerParams`
-    pub params: Arc<dyn TriggerParams>,
-}
-
-/// Parameters to defined specific behavior for a type of Trigger
-pub trait TriggerParams: AsAny + Send + Sync {
-    /// The key used in the HashMap of Runners, used to match it with this Trigger
+/// Try one last time to regain sanity
+/// This is a Trait because different varieties require different parameters
+pub trait Trigger: AsAny + Send + Sync {
+    /// A string key used in the HashMap of Runners, used to match it with
+    /// instances of this particular implementation of Trigger.
+    /// Takes `&self` so that it can be [object-safe](https://doc.rust-lang.org/reference/items/traits.html#object-safety)
     fn get_runner_type(&self) -> String;
+
+    /// TODO I'm almost sold on removing this, and making it the responsibility
+    /// of the RunnerFn. It stays for now to avoid changing too much at once.
+    fn get_crop(&self) -> Crop;
+
+    // TODO an ID is probably still needed, for debugging and logging purposes.
+    // For now though, it's been delegated to individual implementations.
+    // ~~Tensorflow needs it to map triggers to their models.~~
+    // (Actually on second thought, it could trivially use the model path as
+    // the hashmap key -- and it probably should.)
+    //
+    // The API design philosophy here is to 100% let Trigger implementations
+    // decide what to standardize around.
+    //
+    // - Do they all have a `debug` option?
+    // - Do they all `crop` at the beginning?
+    // - Do they share image preprocessing logic?
+    //
+    // All of these need to be *possible*, but the library doesn't need to
+    // enforce them. For example, the Hypetrigger app will make some of these
+    // decisions, and encode a JSON format that reflects it, but the library
+    // implementation can remain agnostic.
+    //
+    // A sub-trait of Trigger is even possible when that enforcement is desired
+    // -- so nothing is lost by not enforcing it here!
+    //
+    // fn get_id(&self) -> String;
 }
 
 /// Defines a rectangle within a image/video frame

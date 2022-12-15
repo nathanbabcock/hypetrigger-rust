@@ -4,7 +4,7 @@ use crate::{
     photon::{ensure_minimum_size, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerFn, RunnerResult, RunnerResultV2},
     threshold::threshold_color_distance,
-    trigger::{Crop, Trigger, TriggerParams},
+    trigger::{Crop, Trigger},
 };
 use photon_rs::{transform::padding_uniform, PhotonImage, Rgb, Rgba};
 use std::{
@@ -16,8 +16,24 @@ use std::{
 use tesseract::{InitializeError, Tesseract};
 use wasm_bindgen::prelude::wasm_bindgen;
 
+pub struct TesseractTrigger {
+    // pub id: String, // here, or in trait?
+    pub crop: Crop, // we may choose to crop in the runner, instead of in ffmpeg filter
+    pub filter: Option<ThresholdFilter>,
+    pub on_emit: OnEmitV2<String>,
+}
+
 /// The key in the hashmap of Runners, used to map Triggers to their Runners
 pub const TESSERACT_RUNNER: &str = "tesseract";
+impl Trigger for TesseractTrigger {
+    fn get_runner_type(&self) -> String {
+        TESSERACT_RUNNER.into()
+    }
+
+    fn get_crop(&self) -> Crop {
+        self.crop.clone()
+    }
+}
 
 #[derive(Clone, Debug)]
 #[wasm_bindgen]
@@ -28,38 +44,21 @@ pub struct ThresholdFilter {
     pub threshold: f64,
 }
 
-pub struct TesseractParams {
-    pub crop: Option<Crop>, // we may choose to crop in the runner, instead of in ffmpeg filter
-    pub filter: Option<ThresholdFilter>,
-    pub on_emit: OnEmitV2<String>,
-}
-
-impl TriggerParams for TesseractParams {
-    fn get_runner_type(&self) -> String {
-        TESSERACT_RUNNER.into()
-    }
-}
-
 /// - Receives: either an image to process, or an exit command
 /// - Sends: the recognized text
-pub fn tesseract_runner(
-    rx: Receiver<RunnerCommand>,
-    on_result: OnEmit,
-    _config: Arc<HypetriggerConfig>,
-) {
+pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerConfig>) {
     let tesseract = RefCell::new(Some(init_tesseract().unwrap()));
     println!("[tesseract] thread initialized");
 
     while let Ok(command) = rx.recv() {
         match command {
             RunnerCommand::ProcessImage(payload) => {
-                let trigger = payload.trigger;
-
-                let params = trigger
-                    .params
+                // 0. downcast to concrete Trigger type
+                let trigger = payload
+                    .trigger
                     .as_any()
-                    .downcast_ref::<TesseractParams>()
-                    .expect("downcast to TesseractParams");
+                    .downcast_ref::<TesseractTrigger>()
+                    .expect("Tesseract runner received a non-Tesseract trigger!");
 
                 // 1. convert raw image to photon
                 let vector = Arc::try_unwrap(payload.image).expect("unwrap buffer");
@@ -67,21 +66,30 @@ pub fn tesseract_runner(
                 let image = PhotonImage::new(rgba32, trigger.crop.width, trigger.crop.height);
 
                 // 2. preprocess
-                let filtered = preprocess_image_for_tesseract(&image, params.filter.clone());
+                let filtered = preprocess_image_for_tesseract(&image, trigger.filter.clone());
 
                 // 3. run ocr
-                let text = ocr(filtered, &tesseract, Some(trigger.id.clone()));
+                let text = ocr(filtered, &tesseract);
 
                 // 4. forward results to tx
                 let result = RunnerResultV2 {
                     result: text,
-                    trigger_id: trigger.id.clone(),
+                    trigger_id: "".into(), //trigger.id.clone(), // TODO we removed this from Trigger Trait -- restore?
                     input_id: payload.input_id.clone(),
                     frame_num: 0, // todo (from Context)
                     timestamp: 0, // todo
                 };
 
-                (params.on_emit)(result);
+                // 5. emit/callback
+                (trigger.on_emit)(result);
+
+                // // todo!("optional logging");
+                // println!(
+                //     "[tesseract] {} ({}ms) => {}",
+                //     trigger_id.unwrap_or("unknown trigger".into()),
+                //     now.elapsed().as_millis(),
+                //     result.trim(),
+                // );
             }
             RunnerCommand::Exit => {
                 println!("[tesseract] received exit command");
@@ -144,13 +152,8 @@ pub fn preprocess_image_for_tesseract(
 }
 
 /// Recognize text from an image
-pub fn ocr(
-    image: PhotonImage,
-    tesseract: &RefCell<Option<Tesseract>>,
-    trigger_id: Option<String>,
-) -> String {
+pub fn ocr(image: PhotonImage, tesseract: &RefCell<Option<Tesseract>>) -> String {
     let now = Instant::now();
-
     let rgba32 = image.get_raw_pixels();
     let buf = rgba32.as_slice();
     let channels = 4;
@@ -168,14 +171,6 @@ pub fn ocr(
         .set_source_resolution(96);
     let result = model.get_text().expect("get text");
     tesseract.replace(Some(model));
-
-    // todo!("optional logging");
-    println!(
-        "[tesseract] {} ({}ms) => {}",
-        trigger_id.unwrap_or("unknown trigger".into()),
-        now.elapsed().as_millis(),
-        result.trim(),
-    );
 
     result
 }
