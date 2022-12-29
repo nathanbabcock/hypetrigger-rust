@@ -1,6 +1,6 @@
 use crate::config::HypetriggerConfig;
 use crate::logging::LoggingConfig;
-use crate::runner::{ProcessImagePayload, RunnerCommand, WorkerThread};
+use crate::runner::{RunnerCommand, RunnerContext, WorkerThread};
 use crate::trigger::Trigger;
 
 use std::io::{BufRead, BufReader, Error, Read, Write};
@@ -240,24 +240,25 @@ pub fn spawn_ffmpeg_stdout_thread(
             }
 
             // Listen for data
-            let mut cur_frame = 0;
+            let mut frame_num = 0;
             let num_triggers = config.triggers.len();
             while stdout
-                .read_exact(&mut buffers[cur_frame % num_triggers])
+                .read_exact(&mut buffers[frame_num % num_triggers])
                 .is_ok()
             {
-                let cur_trigger = &config.triggers[cur_frame % num_triggers];
-                let clone = buffers[cur_frame % num_triggers].clone(); // Necessary?
+                let cur_trigger = &config.triggers[frame_num % num_triggers];
+                let clone = buffers[frame_num % num_triggers].clone(); // Necessary?
                 let raw_image_data: RawImageData = Arc::new(clone);
 
-                on_ffmpeg_stdout(
-                    config.clone(),
-                    cur_trigger.clone(),
-                    raw_image_data,
-                    get_runner.clone(),
-                );
+                let context = RunnerContext {
+                    config: config.clone(),
+                    image: raw_image_data,
+                    trigger: cur_trigger.clone(),
+                    frame_num: frame_num as u64,
+                };
 
-                cur_frame += 1;
+                on_ffmpeg_stdout(context, get_runner.clone());
+                frame_num += 1;
             }
 
             if config.logging.debug_thread_exit {
@@ -267,15 +268,8 @@ pub fn spawn_ffmpeg_stdout_thread(
 }
 
 pub type GetRunnerThread = Arc<dyn (Fn(String) -> Arc<WorkerThread>) + Sync + Send>;
-pub type OnFfmpegStdout = Arc<
-    dyn Fn(Arc<HypetriggerConfig>, Arc<dyn Trigger>, RawImageData, GetRunnerThread) + Sync + Send,
->;
-pub fn on_ffmpeg_stdout(
-    config: Arc<HypetriggerConfig>,
-    cur_trigger: Arc<dyn Trigger>,
-    raw_image_data: RawImageData,
-    get_runner: GetRunnerThread,
-) {
+pub type OnFfmpegStdout = Arc<dyn Fn(RunnerContext, GetRunnerThread) + Sync + Send>;
+pub fn on_ffmpeg_stdout(context: RunnerContext, get_runner: GetRunnerThread) {
     // TODO num_triggers went out of scope
     // if config.logging.debug_buffer_transfer {
     //     println!(
@@ -285,25 +279,19 @@ pub fn on_ffmpeg_stdout(
     //     );
     // }
 
-    let tx_name = &cur_trigger.get_runner_type();
+    let tx_name = &context.trigger.get_runner_type();
     let tx = get_runner(tx_name.clone()).tx.clone();
 
-    if config.logging.debug_buffer_transfer {
+    if context.config.logging.debug_buffer_transfer {
         println!(
             "[ffmpeg] sending {} bytes to {} for trigger {}",
-            raw_image_data.len(),
+            context.image.len(),
             tx_name,
             "", //cur_trigger.id, // TODO no more id
         );
     }
 
-    let payload = ProcessImagePayload {
-        input_id: config.inputPath.clone(),
-        image: raw_image_data,
-        trigger: cur_trigger,
-    };
-
-    tx.send(RunnerCommand::ProcessImage(payload))
+    tx.send(RunnerCommand::ProcessImage(context))
         .expect("send image buffer");
 }
 

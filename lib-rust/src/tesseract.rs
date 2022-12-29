@@ -52,16 +52,19 @@ pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerCon
 
     while let Ok(command) = rx.recv() {
         match command {
-            RunnerCommand::ProcessImage(payload) => {
+            RunnerCommand::ProcessImage(context) => {
                 // 0. downcast to concrete Trigger type
-                let trigger = payload
+                let trigger = context
                     .trigger
                     .as_any()
                     .downcast_ref::<TesseractTrigger>()
                     .expect("Tesseract runner received a non-Tesseract trigger!");
 
                 // 1. convert raw image to photon
-                let vector = Arc::try_unwrap(payload.image).expect("unwrap buffer");
+                let input_id = context.config.inputPath.clone();
+                let frame_num = context.frame_num;
+                let timestamp = context.get_timestamp();
+                let vector = Arc::try_unwrap(context.image).expect("unwrap buffer");
                 let rgba32 = rgb24_to_rgba32(vector);
                 let image = PhotonImage::new(rgba32, trigger.crop.width, trigger.crop.height);
 
@@ -75,9 +78,9 @@ pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerCon
                 let result = RunnerResultV2 {
                     result: text,
                     trigger_id: "".into(), //trigger.id.clone(), // TODO we removed this from Trigger Trait -- restore?
-                    input_id: payload.input_id.clone(),
-                    frame_num: 0, // todo (from Context)
-                    timestamp: 0, // todo
+                    input_id,
+                    frame_num,
+                    timestamp,
                 };
 
                 // 5. emit/callback

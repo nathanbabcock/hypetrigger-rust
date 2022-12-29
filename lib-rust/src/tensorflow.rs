@@ -52,9 +52,9 @@ pub fn tensorflow_runner(rx: Receiver<RunnerCommand>, config: Arc<HypetriggerCon
 
     while let Ok(command) = rx.recv() {
         match command {
-            RunnerCommand::ProcessImage(payload) => {
+            RunnerCommand::ProcessImage(context) => {
                 // -1. Downcast to concrete Trigger type
-                let trigger = payload
+                let trigger = context
                     .trigger
                     .as_any()
                     .downcast_ref::<TensorflowTrigger>()
@@ -64,7 +64,10 @@ pub fn tensorflow_runner(rx: Receiver<RunnerCommand>, config: Arc<HypetriggerCon
                 let (bundle, graph) = saved_models.get(&trigger.model_dir).expect("get model");
 
                 // 1. convert raw image to photon
-                let vector = Arc::try_unwrap(payload.image).expect("unwrap buffer");
+                let input_id = context.config.inputPath.clone();
+                let frame_num = context.frame_num;
+                let timestamp = context.get_timestamp();
+                let vector = Arc::try_unwrap(context.image).expect("unwrap buffer");
                 let rgba32 = rgb24_to_rgba32(vector);
                 let image = PhotonImage::new(rgba32, trigger.crop.width, trigger.crop.height);
 
@@ -94,9 +97,9 @@ pub fn tensorflow_runner(rx: Receiver<RunnerCommand>, config: Arc<HypetriggerCon
                 let result = RunnerResultV2 {
                     result: text,
                     trigger_id: "".into(), // no longer exists // trigger.id.clone(),
-                    input_id: payload.input_id.clone(),
-                    frame_num: 0,
-                    timestamp: 0,
+                    input_id,
+                    frame_num,
+                    timestamp,
                 };
 
                 // 5. emit

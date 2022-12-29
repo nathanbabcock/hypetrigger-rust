@@ -17,19 +17,31 @@ pub struct WorkerThread {
     pub join_handle: std::io::Result<JoinHandle<()>>,
 }
 
-pub struct ProcessImagePayload {
-    pub input_id: String,
-    pub image: RawImageData,
-    pub trigger: Arc<dyn Trigger>,
-    // pub trigger_id: String,
-    // pub width: u32,
-    // pub height: u32,
+/// Specifies all the context/state needed for a Runner to process a single frame
+pub struct RunnerContext {
+    /// The config of the Job that is invoking this run
+    pub config: Arc<HypetriggerConfig>,
 
-    // // pass entire dyn Trigger instance instead?
-    // pub filter: Option<ThresholdFilter>, // needs to go...
+    /// The specific Trigger that is currently being run
+    pub trigger: Arc<dyn Trigger>,
+
+    /// Raw pixels of the video frame
+    pub image: RawImageData,
+
+    /// Monotonically inreasing by 1, starting from 0. Does not correspond
+    /// directly to the frame number of the source video, because it is
+    /// (typically) sampled at a lower framerate.
+    pub frame_num: u64,
 }
+
+impl RunnerContext {
+    pub fn get_timestamp(&self) -> u64 {
+        (self.frame_num as f64 * self.config.samplesPerSecond) as u64
+    }
+}
+
 pub enum RunnerCommand {
-    ProcessImage(ProcessImagePayload),
+    ProcessImage(RunnerContext),
     Exit,
     // NB: If it ever became necessary to add new *triggers* to an existing
     // runner, we could extend RunnerCommand:
