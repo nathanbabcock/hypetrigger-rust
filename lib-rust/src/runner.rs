@@ -1,4 +1,4 @@
-use crate::{config::HypetriggerConfig, emit::OnEmit, ffmpeg::RawImageData, trigger::Trigger};
+use crate::{config::HypetriggerConfig, ffmpeg::RawImageData, trigger::Trigger};
 use std::{
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender},
@@ -78,6 +78,6 @@ pub fn spawn_runner_thread(
     let (tx, rx) = sync_channel::<RunnerCommand>(0);
     let join_handle = thread::Builder::new()
         .name(name)
-        .spawn(move || runner(rx, config.clone()));
+        .spawn(move || runner(rx, config));
     WorkerThread { tx, join_handle }
 }

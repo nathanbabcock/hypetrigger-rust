@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{any::AsAny, runner::RunnerFn};
+use crate::{any::AsAny};
 
 pub type Triggers = Vec<Arc<dyn Trigger>>;
 

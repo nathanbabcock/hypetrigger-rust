@@ -1,9 +1,9 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::{OnEmit, OnEmitV2},
+    emit::{OnEmitV2},
     photon::{ensure_size, ensure_square, rgb24_to_rgba32},
-    runner::{RunnerCommand, RunnerFn, RunnerResult, RunnerResultV2},
-    trigger::{self, Crop, Trigger, Triggers},
+    runner::{RunnerCommand, RunnerResultV2},
+    trigger::{Crop, Trigger, Triggers},
 };
 use photon_rs::PhotonImage;
 use std::{

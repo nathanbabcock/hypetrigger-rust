@@ -1,21 +1,21 @@
 use std::{
     collections::HashMap,
-    io::{Error, Write},
-    process::{Child, ChildStderr, ChildStdin, ChildStdout, Stdio},
+    io::{Write},
+    process::{ChildStdin, Stdio},
     sync::{Arc, Mutex, RwLock},
     thread::JoinHandle,
 };
 
 use crate::{
     config::HypetriggerConfig,
-    emit::{emit_stdout, OnEmit},
+    emit::{OnEmit},
     ffmpeg::{
         on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
         spawn_ffmpeg_stdout_thread, GetRunnerThread, OnFfmpegStderr, OnFfmpegStdout,
         SpawnFfmpegChildprocess, SpawnFfmpegStderrThread, SpawnFfmpegStdoutThread, StdioConfig,
     },
     logging::LoggingConfig,
-    runner::{spawn_runner_thread, RunnerFn, RunnerResult, WorkerThread},
+    runner::{spawn_runner_thread, RunnerFn, WorkerThread},
     tensorflow::TENSORFLOW_RUNNER,
     tesseract::TESSERACT_RUNNER,
 };
@@ -138,8 +138,8 @@ impl Pipeline {
         let runner_fn = *self
             .runners
             .get(&name)
-            .expect(format!("get runner fn for {}", name).as_str());
-        let worker = spawn_runner_thread(name.clone(), runner_fn, config.clone());
+            .unwrap_or_else(|| panic!("get runner fn for {}", name));
+        let worker = spawn_runner_thread(name.clone(), runner_fn, config);
         self.runner_threads
             .write()
             .expect("acquire runner threads write lock")
@@ -193,7 +193,7 @@ impl Pipeline {
         if self.jobs.contains_key(&job_id) {
             return Err(format!("job already exists with id {}", job_id));
         }
-        if config_arc.triggers.len() == 0 {
+        if config_arc.triggers.is_empty() {
             return Err("job contains no triggers".into());
         }
 
@@ -232,15 +232,11 @@ impl Pipeline {
         .expect("spawn ffmpeg stdout thread");
 
         // ffmpeg stderr
-        let ffmpeg_stderr_thread = if let Some(stderr_result) = (self.spawn_ffmpeg_stderr_thread)(
+        let ffmpeg_stderr_thread = (self.spawn_ffmpeg_stderr_thread)(
             ffmpeg_stderr.unwrap(),
             self.logging,
             self.on_ffmpeg_stderr.clone(),
-        ) {
-            Some(stderr_result.expect("spawn ffmpeg stderr thread"))
-        } else {
-            None
-        };
+        ).map(|stderr_result| stderr_result.expect("spawn ffmpeg stderr thread"));
 
         // runner threads
         self.spawn_runners_for_config(config_arc.clone());

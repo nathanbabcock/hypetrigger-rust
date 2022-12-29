@@ -5,7 +5,7 @@ use crate::trigger::Trigger;
 
 use std::io::{BufRead, BufReader, Error, Read, Write};
 use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
+
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{mpsc::Receiver, Arc};
 use std::thread;
@@ -174,9 +174,7 @@ pub fn spawn_ffmpeg_stderr_thread(
     logging: LoggingConfig,
     on_ffmpeg_stderr: OnFfmpegStderr,
 ) -> Option<Result<JoinHandle<()>, Error>> {
-    if let Some(on_ffmpeg_stderr) = on_ffmpeg_stderr {
-        Some(
-            thread::Builder::new()
+    on_ffmpeg_stderr.map(|on_ffmpeg_stderr| thread::Builder::new()
                 .name("ffmpeg_stderr".into())
                 .spawn(move || {
                     BufReader::new(stderr)
@@ -185,11 +183,7 @@ pub fn spawn_ffmpeg_stderr_thread(
                     if logging.debug_thread_exit {
                         println!("[ffmpeg.stderr] done; thread exiting");
                     }
-                }),
-        )
-    } else {
-        None // by default, if nothing will be done with the stderr, don't spawn a thread
-    }
+                }))
 }
 
 /// Callback for every line of ffmpeg stderr
@@ -231,9 +225,8 @@ pub fn spawn_ffmpeg_stdout_thread(
                 let buf_size = (width * height * CHANNELS) as usize;
                 if config.logging.debug_buffer_allocation {
                     println!(
-                        "[rust] Allocated buffer of size {} for trigger id {}",
-                        buf_size,
-                        "" // trigger.id, // todo no more trigger.id
+                        "[rust] Allocated buffer of size {} for trigger id ",
+                        buf_size // trigger.id, // todo no more trigger.id
                     );
                 }
                 buffers.push(vec![0_u8; buf_size]);
@@ -284,10 +277,9 @@ pub fn on_ffmpeg_stdout(context: RunnerContext, get_runner: GetRunnerThread) {
 
     if context.config.logging.debug_buffer_transfer {
         println!(
-            "[ffmpeg] sending {} bytes to {} for trigger {}",
+            "[ffmpeg] sending {} bytes to {} for trigger ",
             context.image.len(),
-            tx_name,
-            "", //cur_trigger.id, // TODO no more id
+            tx_name, //cur_trigger.id, // TODO no more id
         );
     }
 

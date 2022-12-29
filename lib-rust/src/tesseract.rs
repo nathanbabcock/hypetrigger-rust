@@ -1,8 +1,8 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::{OnEmit, OnEmitV2},
+    emit::{OnEmitV2},
     photon::{ensure_minimum_size, rgb24_to_rgba32},
-    runner::{RunnerCommand, RunnerFn, RunnerResult, RunnerResultV2},
+    runner::{RunnerCommand, RunnerResultV2},
     threshold::threshold_color_distance,
     trigger::{Crop, Trigger},
 };
@@ -156,7 +156,7 @@ pub fn preprocess_image_for_tesseract(
 
 /// Recognize text from an image
 pub fn ocr(image: PhotonImage, tesseract: &RefCell<Option<Tesseract>>) -> String {
-    let now = Instant::now();
+    let _now = Instant::now();
     let rgba32 = image.get_raw_pixels();
     let buf = rgba32.as_slice();
     let channels = 4;
