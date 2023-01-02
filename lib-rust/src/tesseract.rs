@@ -1,12 +1,12 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::{OnEmitV2},
+    emit::OnEmitV2,
     photon::{ensure_minimum_size, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerResultV2},
     threshold::threshold_color_distance,
     trigger::{Crop, Trigger},
 };
-use photon_rs::{transform::padding_uniform, PhotonImage, Rgb, Rgba};
+use photon_rs::{helpers::dyn_image_from_raw, transform::padding_uniform, PhotonImage, Rgb, Rgba};
 use std::{
     cell::RefCell,
     path::PathBuf,
@@ -50,7 +50,9 @@ pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerCon
     let tesseract = RefCell::new(Some(init_tesseract().unwrap()));
     println!("[tesseract] thread initialized");
 
+    let mut i = 0;
     while let Ok(command) = rx.recv() {
+        i += 1;
         match command {
             RunnerCommand::ProcessImage(context) => {
                 // 0. downcast to concrete Trigger type
@@ -67,6 +69,15 @@ pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerCon
                 let vector = Arc::try_unwrap(context.image).expect("unwrap buffer");
                 let rgba32 = rgb24_to_rgba32(vector);
                 let image = PhotonImage::new(rgba32, trigger.crop.width, trigger.crop.height);
+
+                // optional debugging
+                // TODO ⚠
+                // 1. formalize this
+                // 2. make it more accessible
+                // 3. share it between all runners
+                // let dyn_image = dyn_image_from_raw(&image);
+                // let now = Instant::now();
+                // dyn_image.save(format!("tesseract-{}.png", i));
 
                 // 2. preprocess
                 let filtered = preprocess_image_for_tesseract(&image, trigger.filter.clone());

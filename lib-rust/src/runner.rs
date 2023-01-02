@@ -35,8 +35,8 @@ pub struct RunnerContext {
 }
 
 impl RunnerContext {
-    pub fn get_timestamp(&self) -> u64 {
-        (self.frame_num as f64 * self.config.samplesPerSecond) as u64
+    pub fn get_timestamp(&self) -> f64 {
+        (self.frame_num as f64 / self.config.samplesPerSecond) as f64
     }
 }
 
@@ -64,7 +64,7 @@ pub struct RunnerResultV2<T> {
     pub frame_num: u64,
     pub trigger_id: String,
     pub input_id: String,
-    pub timestamp: u64,
+    pub timestamp: f64,
 }
 
 pub type RunnerFn = fn(Receiver<RunnerCommand>, Arc<HypetriggerConfig>);

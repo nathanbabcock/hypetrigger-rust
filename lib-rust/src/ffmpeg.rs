@@ -76,14 +76,14 @@ pub fn spawn_ffmpeg_childprocess(
     filter_complex.push(';');
     for i in 0..num_triggers {
         let trigger = &config.triggers[i];
-        let in_w = trigger.get_crop().widthPercent / 100.0;
-        let in_h = trigger.get_crop().heightPercent / 100.0;
-        let x = trigger.get_crop().xPercent / 100.0;
-        let y = trigger.get_crop().yPercent / 100.0;
+        let in_w = trigger.get_crop().width;
+        let in_h = trigger.get_crop().height;
+        let x = trigger.get_crop().x;
+        let y = trigger.get_crop().y;
 
         filter_complex.push_str(
             format!(
-                "[in{}]crop=round(in_w*{}):round(in_h*{}):round(in_w*{}):round(in_h*{})[out{}]",
+                "[in{}]crop={}:{}:{}:{}:exact=1[out{}]",
                 i, in_w, in_h, x, y, i
             )
             .as_str(),
@@ -148,12 +148,13 @@ pub fn spawn_ffmpeg_childprocess(
     child
 }
 
-/// Callback for each line of FFMPEG stderr
-pub type OnFfmpegStderr = Option<Arc<dyn Fn(Result<String, Error>) + Send + Sync>>;
-
 /// Function signature for spawning a thread to process ffmpeg stderr
 pub type SpawnFfmpegStderrThread = Arc<
-    dyn (Fn(ChildStderr, LoggingConfig, OnFfmpegStderr) -> Option<Result<JoinHandle<()>, Error>>)
+    dyn (Fn(
+            ChildStderr,
+            Arc<HypetriggerConfig>,
+            OnFfmpegStderr,
+        ) -> Option<Result<JoinHandle<()>, Error>>)
         + Sync
         + Send,
 >;
@@ -171,23 +172,30 @@ pub type SpawnFfmpegStderrThread = Arc<
 /// - Sends: Nothing/calls callback on each line
 pub fn spawn_ffmpeg_stderr_thread(
     stderr: ChildStderr,
-    logging: LoggingConfig,
+    config: Arc<HypetriggerConfig>,
     on_ffmpeg_stderr: OnFfmpegStderr,
 ) -> Option<Result<JoinHandle<()>, Error>> {
-    on_ffmpeg_stderr.map(|on_ffmpeg_stderr| thread::Builder::new()
-                .name("ffmpeg_stderr".into())
-                .spawn(move || {
-                    BufReader::new(stderr)
-                        .lines()
-                        .for_each(|line| (on_ffmpeg_stderr)(line));
-                    if logging.debug_thread_exit {
-                        println!("[ffmpeg.stderr] done; thread exiting");
-                    }
-                }))
+    let logging = config.logging.clone();
+    on_ffmpeg_stderr.map(|on_ffmpeg_stderr| {
+        thread::Builder::new()
+            .name("ffmpeg_stderr".into())
+            .spawn(move || {
+                BufReader::new(stderr)
+                    .lines()
+                    .for_each(|line| (on_ffmpeg_stderr)(line, config.clone()));
+                if logging.debug_thread_exit {
+                    println!("[ffmpeg.stderr] done; thread exiting");
+                }
+            })
+    })
 }
 
+/// Callback for each line of FFMPEG stderr
+pub type OnFfmpegStderr =
+    Option<Arc<dyn Fn(Result<String, Error>, Arc<HypetriggerConfig>) + Send + Sync>>;
+
 /// Callback for every line of ffmpeg stderr
-pub fn on_ffmpeg_stderr(line: Result<String, Error>) {
+pub fn on_ffmpeg_stderr(line: Result<String, Error>, _config: Arc<HypetriggerConfig>) {
     match line {
         Ok(string) => println!("{}", string),
         Err(error) => eprintln!("{}", error),
@@ -234,13 +242,11 @@ pub fn spawn_ffmpeg_stdout_thread(
 
             // Listen for data
             let mut frame_num = 0;
+            let mut trigger_index = 0;
             let num_triggers = config.triggers.len();
-            while stdout
-                .read_exact(&mut buffers[frame_num % num_triggers])
-                .is_ok()
-            {
-                let cur_trigger = &config.triggers[frame_num % num_triggers];
-                let clone = buffers[frame_num % num_triggers].clone(); // Necessary?
+            while stdout.read_exact(&mut buffers[trigger_index]).is_ok() {
+                let cur_trigger = &config.triggers[trigger_index];
+                let clone = buffers[trigger_index].clone(); // Necessary?
                 let raw_image_data: RawImageData = Arc::new(clone);
 
                 let context = RunnerContext {
@@ -251,7 +257,11 @@ pub fn spawn_ffmpeg_stdout_thread(
                 };
 
                 on_ffmpeg_stdout(context, get_runner.clone());
-                frame_num += 1;
+                trigger_index += 1;
+                if trigger_index >= num_triggers {
+                    trigger_index = 0;
+                    frame_num += 1;
+                }
             }
 
             if config.logging.debug_thread_exit {

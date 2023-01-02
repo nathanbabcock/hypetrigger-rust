@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{Write},
+    io::Write,
     process::{ChildStdin, Stdio},
     sync::{Arc, Mutex, RwLock},
     thread::JoinHandle,
@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     config::HypetriggerConfig,
-    emit::{OnEmit},
+    emit::OnEmit,
     ffmpeg::{
         on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
         spawn_ffmpeg_stdout_thread, GetRunnerThread, OnFfmpegStderr, OnFfmpegStdout,
@@ -234,9 +234,10 @@ impl Pipeline {
         // ffmpeg stderr
         let ffmpeg_stderr_thread = (self.spawn_ffmpeg_stderr_thread)(
             ffmpeg_stderr.unwrap(),
-            self.logging,
+            config_arc.clone(),
             self.on_ffmpeg_stderr.clone(),
-        ).map(|stderr_result| stderr_result.expect("spawn ffmpeg stderr thread"));
+        )
+        .map(|stderr_result| stderr_result.expect("spawn ffmpeg stderr thread"));
 
         // runner threads
         self.spawn_runners_for_config(config_arc.clone());
