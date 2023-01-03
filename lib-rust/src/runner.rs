@@ -1,8 +1,13 @@
-use crate::{config::HypetriggerConfig, ffmpeg::RawImageData, trigger::Trigger};
+use crate::{
+    config::HypetriggerConfig,
+    debugger::{Debugger, DebuggerRef},
+    ffmpeg::RawImageData,
+    trigger::Trigger,
+};
 use std::{
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender},
-        Arc,
+        Arc, RwLock,
     },
     thread::{self, JoinHandle},
 };
@@ -18,7 +23,6 @@ pub struct WorkerThread {
 }
 
 /// Specifies all the context/state needed for a Runner to process a single frame
-#[derive(Clone)]
 pub struct RunnerContext {
     /// The config of the Job that is invoking this run
     pub config: Arc<HypetriggerConfig>,
@@ -42,7 +46,7 @@ impl RunnerContext {
 }
 
 pub enum RunnerCommand {
-    ProcessImage(RunnerContext),
+    ProcessImage(RunnerContext, DebuggerRef),
     Exit,
     // NB: If it ever became necessary to add new *triggers* to an existing
     // runner, we could extend RunnerCommand:

@@ -8,14 +8,13 @@ use std::{
 
 use crate::{
     config::HypetriggerConfig,
-    debugger::Debugger,
+    debugger::{Debugger, DebuggerRef},
     emit::OnEmit,
     ffmpeg::{
         on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
         spawn_ffmpeg_stdout_thread, GetRunnerThread, OnFfmpegStderr, OnFfmpegStdout,
         SpawnFfmpegChildprocess, SpawnFfmpegStderrThread, SpawnFfmpegStdoutThread, StdioConfig,
     },
-    logging::LoggingConfig,
     runner::{spawn_runner_thread, RunnerFn, WorkerThread},
     tensorflow::TENSORFLOW_RUNNER,
     tesseract::TESSERACT_RUNNER,
@@ -36,7 +35,7 @@ pub struct Pipeline {
 
     /// Turn on or off different logging channels (ffmpeg, tesseract, tensorflow, etc.)
     #[builder(default = "Arc::new(RwLock::new(Debugger::default()))")]
-    debugger: Arc<RwLock<Debugger>>,
+    debugger: DebuggerRef,
 
     // --- Callbacks ---
     /// Callback that runs inside a Runner thread when a result for a frame has
@@ -215,6 +214,7 @@ impl Pipeline {
             config_arc.clone(),
             ffmpeg_stdio,
             self.ffmpeg_exe.clone(),
+            self.debugger.clone(),
         )
         .expect("spawn ffmpeg childprocess");
         let ffmpeg_stdin = Mutex::new(ffmpeg_childprocess.stdin);
@@ -227,6 +227,7 @@ impl Pipeline {
         let ffmpeg_stdout_thread = (self.spawn_ffmpeg_stdout_thread)(
             ffmpeg_stdout,
             config_arc.clone(),
+            self.debugger.clone(),
             self.on_ffmpeg_stdout.clone(),
             get_runner_thread.clone(),
         )
@@ -237,6 +238,7 @@ impl Pipeline {
             ffmpeg_stderr.unwrap(),
             config_arc.clone(),
             self.on_ffmpeg_stderr.clone(),
+            self.debugger.clone(),
         )
         .map(|stderr_result| stderr_result.expect("spawn ffmpeg stderr thread"));
 

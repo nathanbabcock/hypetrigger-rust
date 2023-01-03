@@ -1,9 +1,14 @@
-use crate::{logging::LoggingConfig, runner::RunnerContext};
+use crate::{config::HypetriggerConfig, runner::RunnerContext, trigger::Trigger};
 use image::DynamicImage;
 use std::{
-    io::stdin,
+    env::{current_dir, current_exe},
+    fs::OpenOptions,
+    io::{stdin, Write},
     sync::{Arc, RwLock},
 };
+
+/// convenient alias for passing a debugger between threads
+pub type DebuggerRef = Arc<RwLock<Debugger>>;
 
 #[derive(Clone)]
 pub struct DebuggerStep {
@@ -11,7 +16,18 @@ pub struct DebuggerStep {
     /// - The config of the Job that is invoking this run
     /// - Frame number of the input media
     /// - The specific Trigger currently being run on that frame
-    pub context: RunnerContext,
+    // pub context: RunnerContext,
+
+    /// The config of the Job that is invoking this run
+    pub config: Arc<HypetriggerConfig>,
+
+    /// The specific Trigger that is currently being run
+    pub trigger: Arc<dyn Trigger>,
+
+    /// Monotonically inreasing by 1, starting from 0. Does not correspond
+    /// directly to the frame number of the source video, because it is
+    /// (typically) sampled at a lower framerate.
+    pub frame_num: u64,
 
     /// An explanation of what this step of the pipeline is doing
     ///
@@ -42,34 +58,61 @@ pub enum DebuggerState {
 
 pub struct Debugger {
     pub state: DebuggerState,
-    pub cur_step: Option<DebuggerStep>,
-    pub prev_step: Option<DebuggerStep>,
-
-    /// whether to log to stdout, to save log file, to save images
-    pub _debugger_config: LoggingConfig,
+    // pub cur_step: Option<DebuggerStep>,
+    // pub prev_step: Option<DebuggerStep>,
+    pub log_to_disk: bool,
+    pub log_file: String,
 }
 
 impl Debugger {
     /// Pauses the debugger (at the next step/breakpoint), then blocks and waits
     /// for user input
-    pub fn pause(this: Arc<RwLock<Self>>) {
+    pub fn pause(this: DebuggerRef) {
         this.write().unwrap().state = DebuggerState::Paused;
     }
 
     /// Pauses the debugger (at the next step/breakpoint), then blocks and waits
     /// for user input
-    pub fn resume(this: Arc<RwLock<Self>>) {
+    pub fn resume(this: DebuggerRef) {
         let mut debugger = this.write().unwrap();
         debugger.state = DebuggerState::Resumed;
-        debugger.cur_step = None;
-        debugger.prev_step = None;
+        // debugger.cur_step = None;
+        // debugger.prev_step = None;
     }
+
+    /// Writes a line to the log file on disk (if enabled)
+    pub fn log(&self, message: &str) {
+        if !self.log_to_disk {
+            return;
+        }
+
+        // TODO should this be kept open? or opened/closed each time?
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.log_file.clone())
+            .unwrap_or_else(|e| {
+                eprintln!("Couldn't open log file: {}", e);
+                panic!("unrecoverable");
+            });
+
+        // // temporary
+        // println!("{}", self.log_file);
+        // println!("[debugger] press enter to continue.");
+        // stdin().read_line(&mut String::new()).unwrap();
+
+        if let Err(e) = writeln!(file, "{}", message) {
+            eprintln!("Couldn't write to file: {}", e);
+        }
+    }
+
+    // TODO: clear log file on init
 
     /// Attach an entry point for the debugger to (potentially) pause and inspect
     /// the current state of execution.
     ///
     /// If the debugger is not active, this function is skipped over and instantly returns.
-    pub fn register_step(this: Arc<RwLock<Self>>, step: DebuggerStep) {
+    pub fn register_step(this: DebuggerRef, step: DebuggerStep) {
         let this_clone = this.clone();
         let debugger = this.read().unwrap();
         match debugger.state {
@@ -85,13 +128,10 @@ impl Debugger {
 
     pub fn step_stdout(step: &DebuggerStep) {
         println!("[debugger] execution paused.");
-        println!(" - input path: {}", step.context.config.inputPath);
-        println!(" - frame number: {}", step.context.frame_num);
-        println!(" - timestamp: {}", step.context.get_timestamp());
-        println!(
-            " - trigger type: {}",
-            step.context.trigger.get_runner_type()
-        );
+        println!(" - input path: {}", step.config.inputPath);
+        println!(" - frame number: {}", step.frame_num);
+        // println!(" - timestamp: {}", step.get_timestamp()); // TODO lost in time
+        println!(" - trigger type: {}", step.trigger.get_runner_type());
         println!(" - current step: {}", step.description);
 
         if let Some(image) = &step.image {
@@ -104,27 +144,29 @@ impl Debugger {
     /// Save a temporary image to file, and log the path and dimensions to stdout
     pub fn handle_step_image(image: &DynamicImage) {
         println!(" - current image ({}x{})", image.width(), image.height());
-        // let dyn_image = dyn_image_from_raw(&image);
-        let path = "current-frame.temp.bmp"; // todo create temp folder
+        let dir = current_exe().unwrap();
+        let path_buf = dir.parent().unwrap().join("current-frame.tmp.bmp");
+        let path = path_buf.as_os_str().to_str().unwrap();
+        // TODO make this configurable at a higher scope
+        // TODO create temp folder
         image
             .save(path)
             .unwrap_or_else(|e| eprintln!("failed to save image: {:?}", e));
-        // open::that(path).unwrap_or_else(|e| eprintln!("failed to open image: {:?}", e)); // todo; only open the first time
         println!(" - image path: {}", path);
     }
 
     /// Blocks while waiting for the user's command
-    pub fn step_stdin(_this: Arc<RwLock<Self>>, step: &DebuggerStep) {
+    pub fn step_stdin(_this: DebuggerRef, step: &DebuggerStep) {
         println!("[debugger] press enter to continue.");
         stdin().read_line(&mut String::new()).unwrap();
     }
 
-    pub fn handle_command(_this: Arc<RwLock<Self>>, _command: &str) {
+    pub fn handle_command(_this: DebuggerRef, _command: &str) {
         todo!("");
     }
 
     /// Clears the last few lines of console output
-    pub fn clear_step(_this: Arc<RwLock<Self>>, _step: DebuggerStep) {
+    pub fn clear_step(_this: DebuggerRef, _step: DebuggerStep) {
         todo!("");
     }
 }
@@ -133,9 +175,20 @@ impl Default for Debugger {
     fn default() -> Self {
         Self {
             state: DebuggerState::Resumed,
-            cur_step: None,
-            prev_step: None,
-            _debugger_config: LoggingConfig::default(),
+            // cur_step: None,
+            // prev_step: None,
+            log_to_disk: true,
+            log_file: current_exe()
+                .unwrap()
+                .parent()
+                .unwrap()
+                .join("hypetrigger.tmp.log")
+                .as_os_str()
+                .to_str()
+                .unwrap()
+                .to_string(),
+            // TODO: log directory
+            // TODO: image filename
         }
     }
 }

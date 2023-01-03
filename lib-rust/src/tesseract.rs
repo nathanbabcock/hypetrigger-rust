@@ -55,36 +55,34 @@ pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerCon
     while let Ok(command) = rx.recv() {
         i += 1;
         match command {
-            RunnerCommand::ProcessImage(context) => {
+            RunnerCommand::ProcessImage(context, debugger_ref) => {
+                // -1. unwrap debugger ref
+                let debugger = debugger_ref.read().unwrap();
+
                 // 0. downcast to concrete Trigger type
                 let trigger = context
                     .trigger
                     .as_any()
                     .downcast_ref::<TesseractTrigger>()
                     .expect("Tesseract runner received a non-Tesseract trigger!");
-
-                // 1. convert raw image to photon
                 let input_id = context.config.inputPath.clone();
                 let frame_num = context.frame_num;
                 let timestamp = context.get_timestamp();
-                let vector = Arc::try_unwrap(context.image).expect("unwrap buffer");
+
+                // 0.5. unwrap buffer from ffmpeg
+                let vector = Arc::try_unwrap(context.image).unwrap_or_else(|arc| {
+                    eprintln!("[err] try_unwrap failed on RawImageData Arc");
+                    eprintln!(
+                        "[err] This indicates that there's more than one strong reference to the Arc"
+                    );
+                    eprintln!("[err] the Arc's internal buffer has length {}", arc.len());
+                    panic!("could not unwrap RawImageData Arc")
+                });
+                debugger.log(&format!("[tesseract] Received {} bytes", vector.len()));
+
+                // 1. convert raw image to photon
                 let rgba32 = rgb24_to_rgba32(vector);
                 let image = PhotonImage::new(rgba32, trigger.crop.width, trigger.crop.height);
-
-                // optional debugging
-                // TODO ⚠
-                // 1. formalize this
-                // 2. make it more accessible
-                // 3. share it between all runners
-
-                println!("paused; press enter to continue");
-                stdin().read_line(&mut String::new()).unwrap();
-                let dyn_image = dyn_image_from_raw(&image);
-                let path = "current-frame.temp.bmp"; // todo create temp folder
-                dyn_image
-                    .save(path)
-                    .unwrap_or_else(|e| eprintln!("failed to save image: {:?}", e));
-                // open::that(path).unwrap_or_else(|e| eprintln!("failed to open image: {:?}", e)); // todo; only open the first time
 
                 // 2. preprocess
                 let filtered = preprocess_image_for_tesseract(&image, trigger.filter.clone());

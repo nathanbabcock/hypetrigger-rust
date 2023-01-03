@@ -1,9 +1,10 @@
-use crate::config::HypetriggerConfig;
-use crate::logging::LoggingConfig;
-use crate::runner::{RunnerCommand, RunnerContext, WorkerThread};
-use crate::trigger::Trigger;
+use image::{DynamicImage, ImageBuffer};
 
-use std::io::{BufRead, BufReader, Error, Read, Write};
+use crate::config::HypetriggerConfig;
+use crate::debugger::{Debugger, DebuggerRef, DebuggerStep};
+use crate::runner::{RunnerCommand, RunnerContext, WorkerThread};
+
+use std::io::{stdin, BufRead, BufReader, Error, Read, Write};
 use std::os::windows::process::CommandExt;
 
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
@@ -25,7 +26,9 @@ pub struct StdioConfig {
 }
 
 pub type SpawnFfmpegChildprocess = Arc<
-    dyn (Fn(Arc<HypetriggerConfig>, StdioConfig, String) -> Result<Child, Error>) + Sync + Send,
+    dyn (Fn(Arc<HypetriggerConfig>, StdioConfig, String, DebuggerRef) -> Result<Child, Error>)
+        + Sync
+        + Send,
 >;
 /// Generates and runs an FFMPEG command similar to this one (in the case of two inputs):
 ///
@@ -61,11 +64,13 @@ pub fn spawn_ffmpeg_childprocess(
     config: Arc<HypetriggerConfig>,
     stdio_config: StdioConfig,
     ffmpeg_exe: String,
+    debugger: DebuggerRef,
 ) -> Result<Child, Error> {
     // config parameters
     let input_video = config.inputPath.as_str();
     let samples_per_second = config.samplesPerSecond;
     let num_triggers = config.triggers.len();
+    let debugger = debugger.read().unwrap();
 
     // construct filter graph
     let mut filter_complex: String =
@@ -95,9 +100,7 @@ pub fn spawn_ffmpeg_childprocess(
 
     // retrieve ffmpeg path
     let ffmpeg_path_str = ffmpeg_exe.as_str();
-    if config.logging.debug_ffmpeg {
-        println!("[ffmpeg] exe: {}", ffmpeg_path_str);
-    }
+    debugger.log(&format!("[ffmpeg] using exe: {}", ffmpeg_path_str));
 
     // spawn command
     let mut cmd = Command::new(ffmpeg_path_str);
@@ -130,20 +133,18 @@ pub fn spawn_ffmpeg_childprocess(
         .spawn();
 
     // debug output
-    if config.logging.debug_ffmpeg {
-        println!("[ffmpeg] debug command:");
-        println!("ffmpeg \\");
-        println!("  -hwaccel auto \\");
-        println!("  -i \"{}\" \\", input_video);
-        println!("  -filter_complex \"{}\" \\", filter_complex);
-        for i in 0..num_triggers {
-            println!("  -map [out{}] \\", i);
-        }
-        println!("  -vsync drop \\");
-        println!("  -vframes {} \\", num_triggers * 5);
-        println!("  -an -y \\");
-        println!("  \"scripts/frame%03d.bmp\"");
+    debugger.log("[ffmpeg] debug command:");
+    debugger.log("ffmpeg \\");
+    debugger.log("  -hwaccel auto \\");
+    debugger.log(format!("  -i \"{}\" \\", input_video).as_str());
+    debugger.log(format!("  -filter_complex \"{}\" \\", filter_complex).as_str());
+    for i in 0..num_triggers {
+        debugger.log(format!("  -map [out{}] \\", i).as_str());
     }
+    debugger.log("  -vsync drop \\");
+    debugger.log(format!("  -vframes {} \\", num_triggers * 5).as_str());
+    debugger.log("  -an -y \\");
+    debugger.log("  \"scripts/frame%03d.bmp\"");
 
     child
 }
@@ -154,6 +155,7 @@ pub type SpawnFfmpegStderrThread = Arc<
             ChildStderr,
             Arc<HypetriggerConfig>,
             OnFfmpegStderr,
+            DebuggerRef,
         ) -> Option<Result<JoinHandle<()>, Error>>)
         + Sync
         + Send,
@@ -174,28 +176,32 @@ pub fn spawn_ffmpeg_stderr_thread(
     stderr: ChildStderr,
     config: Arc<HypetriggerConfig>,
     on_ffmpeg_stderr: OnFfmpegStderr,
+    debugger: DebuggerRef,
 ) -> Option<Result<JoinHandle<()>, Error>> {
-    let logging = config.logging.clone();
     on_ffmpeg_stderr.map(|on_ffmpeg_stderr| {
         thread::Builder::new()
             .name("ffmpeg_stderr".into())
             .spawn(move || {
-                BufReader::new(stderr)
-                    .lines()
-                    .for_each(|line| (on_ffmpeg_stderr)(line, config.clone()));
-                if logging.debug_thread_exit {
-                    println!("[ffmpeg.stderr] done; thread exiting");
-                }
+                let debugger_clone = debugger.clone();
+                let debugger = debugger.read().unwrap();
+                BufReader::new(stderr).lines().for_each(|line| {
+                    (on_ffmpeg_stderr)(line, config.clone(), debugger_clone.clone())
+                });
+                debugger.log("[ffmpeg.stderr] done; thread exiting");
             })
     })
 }
 
 /// Callback for each line of FFMPEG stderr
 pub type OnFfmpegStderr =
-    Option<Arc<dyn Fn(Result<String, Error>, Arc<HypetriggerConfig>) + Send + Sync>>;
+    Option<Arc<dyn Fn(Result<String, Error>, Arc<HypetriggerConfig>, DebuggerRef) + Send + Sync>>;
 
 /// Callback for every line of ffmpeg stderr
-pub fn on_ffmpeg_stderr(line: Result<String, Error>, _config: Arc<HypetriggerConfig>) {
+pub fn on_ffmpeg_stderr(
+    line: Result<String, Error>,
+    _config: Arc<HypetriggerConfig>,
+    _debugger: DebuggerRef,
+) {
     match line {
         Ok(string) => println!("{}", string),
         Err(error) => eprintln!("{}", error),
@@ -206,6 +212,7 @@ pub type SpawnFfmpegStdoutThread = Arc<
     dyn (Fn(
             ChildStdout,
             Arc<HypetriggerConfig>,
+            DebuggerRef,
             OnFfmpegStdout,
             GetRunnerThread,
         ) -> Result<JoinHandle<()>, Error>)
@@ -218,12 +225,16 @@ pub type SpawnFfmpegStdoutThread = Arc<
 pub fn spawn_ffmpeg_stdout_thread(
     mut stdout: ChildStdout,
     config: Arc<HypetriggerConfig>,
+    debugger: DebuggerRef,
     on_ffmpeg_stdout: OnFfmpegStdout,
     get_runner: GetRunnerThread,
 ) -> Result<JoinHandle<()>, Error> {
     thread::Builder::new()
         .name("ffmpeg_stdout".into())
         .spawn(move || {
+            let debugger_clone = debugger.clone();
+            let debugger = debugger.read().unwrap();
+
             // Init buffers
             let mut buffers: Vec<Vec<u8>> = Vec::new();
             for trigger in &config.triggers {
@@ -231,12 +242,8 @@ pub fn spawn_ffmpeg_stdout_thread(
                 let height = trigger.get_crop().height;
                 const CHANNELS: u32 = 3;
                 let buf_size = (width * height * CHANNELS) as usize;
-                if config.logging.debug_buffer_allocation {
-                    println!(
-                        "[rust] Allocated buffer of size {} for trigger id ",
-                        buf_size // trigger.id, // todo no more trigger.id
-                    );
-                }
+                debugger
+                    .log(format!("[ffmpeg.stdout] Allocated buffer of size {}", buf_size).as_str());
                 buffers.push(vec![0_u8; buf_size]);
             }
 
@@ -245,6 +252,14 @@ pub fn spawn_ffmpeg_stdout_thread(
             let mut trigger_index = 0;
             let num_triggers = config.triggers.len();
             while stdout.read_exact(&mut buffers[trigger_index]).is_ok() {
+                debugger.log(
+                    format!(
+                        "[ffmpeg.stdout] Read {} bytes",
+                        buffers[trigger_index].len()
+                    )
+                    .as_str(),
+                );
+
                 let cur_trigger = &config.triggers[trigger_index];
                 let clone = buffers[trigger_index].clone(); // Necessary?
                 let raw_image_data: RawImageData = Arc::new(clone);
@@ -256,7 +271,7 @@ pub fn spawn_ffmpeg_stdout_thread(
                     frame_num: frame_num as u64,
                 };
 
-                on_ffmpeg_stdout(context, get_runner.clone());
+                on_ffmpeg_stdout(context, get_runner.clone(), debugger_clone.clone());
                 trigger_index += 1;
                 if trigger_index >= num_triggers {
                     trigger_index = 0;
@@ -264,36 +279,61 @@ pub fn spawn_ffmpeg_stdout_thread(
                 }
             }
 
-            if config.logging.debug_thread_exit {
-                println!("[ffmpeg] done; thread exiting");
-            }
+            debugger.log("[ffmpeg.stdout] done; thread exiting");
         })
 }
 
 pub type GetRunnerThread = Arc<dyn (Fn(String) -> Arc<WorkerThread>) + Sync + Send>;
-pub type OnFfmpegStdout = Arc<dyn Fn(RunnerContext, GetRunnerThread) + Sync + Send>;
-pub fn on_ffmpeg_stdout(context: RunnerContext, get_runner: GetRunnerThread) {
-    // TODO num_triggers went out of scope
-    // if config.logging.debug_buffer_transfer {
-    //     println!(
-    //         "[ffmpeg] read {} bytes for trigger {}",
-    //         buffers[cur_frame % num_triggers].len(),
-    //         cur_trigger.id
-    //     );
-    // }
+pub type OnFfmpegStdout = Arc<dyn Fn(RunnerContext, GetRunnerThread, DebuggerRef) + Sync + Send>;
+pub fn on_ffmpeg_stdout(
+    context: RunnerContext,
+    get_runner: GetRunnerThread,
+    debugger: DebuggerRef,
+) {
+    // RawImageData to DynamicImage
+    // TODO: standardize image format
+    // TODO: Causes more than one strong reference to the image data
+    // let image_clone = context.image.clone();
+    // let vector = Arc::try_unwrap(image_clone).unwrap_or_else(|_| {
+    //     eprintln!("something bad happened.");
+    //     stdin().read_line(&mut String::new()).unwrap();
+    //     panic!("you died");
+    // });
+    // let image_buffer = ImageBuffer::from_raw(
+    //     context.trigger.get_crop().width,
+    //     context.trigger.get_crop().height,
+    //     vector,
+    // )
+    // .unwrap();
+    // let dynamic_image = DynamicImage::ImageRgb8(image_buffer);
+
+    // Register a potential breakpoint
+    Debugger::register_step(
+        debugger.clone(),
+        DebuggerStep {
+            config: context.config.clone(),
+            trigger: context.trigger.clone(),
+            frame_num: context.frame_num,
+            description: "Received frame from ffmpeg".into(),
+            // image: Some(dynamic_image),
+            image: None,
+        },
+    );
 
     let tx_name = &context.trigger.get_runner_type();
     let tx = get_runner(tx_name.clone()).tx.clone();
-
-    if context.config.logging.debug_buffer_transfer {
-        println!(
-            "[ffmpeg] sending {} bytes to {} for trigger ",
+    let debugger_clone = debugger.clone();
+    let debugger = debugger.read().unwrap();
+    debugger.log(
+        format!(
+            "[ffmpeg.stdout] Sending {} bytes to {} runner",
             context.image.len(),
-            tx_name, //cur_trigger.id, // TODO no more id
-        );
-    }
+            tx_name,
+        )
+        .as_str(),
+    );
 
-    tx.send(RunnerCommand::ProcessImage(context))
+    tx.send(RunnerCommand::ProcessImage(context, debugger_clone))
         .expect("send image buffer");
 }
 

@@ -1,6 +1,6 @@
 use crate::{
     config::HypetriggerConfig,
-    emit::{OnEmitV2},
+    emit::OnEmitV2,
     photon::{ensure_size, ensure_square, rgb24_to_rgba32},
     runner::{RunnerCommand, RunnerResultV2},
     trigger::{Crop, Trigger, Triggers},
@@ -52,7 +52,7 @@ pub fn tensorflow_runner(rx: Receiver<RunnerCommand>, config: Arc<HypetriggerCon
 
     while let Ok(command) = rx.recv() {
         match command {
-            RunnerCommand::ProcessImage(context) => {
+            RunnerCommand::ProcessImage(context, _debugger) => {
                 // -1. Downcast to concrete Trigger type
                 let trigger = context
                     .trigger
