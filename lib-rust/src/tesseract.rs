@@ -9,6 +9,7 @@ use crate::{
 use photon_rs::{helpers::dyn_image_from_raw, transform::padding_uniform, PhotonImage, Rgb, Rgba};
 use std::{
     cell::RefCell,
+    io::stdin,
     path::PathBuf,
     sync::{mpsc::Receiver, Arc},
     time::Instant,
@@ -75,9 +76,15 @@ pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerCon
                 // 1. formalize this
                 // 2. make it more accessible
                 // 3. share it between all runners
-                // let dyn_image = dyn_image_from_raw(&image);
-                // let now = Instant::now();
-                // dyn_image.save(format!("tesseract-{}.png", i));
+
+                println!("paused; press enter to continue");
+                stdin().read_line(&mut String::new()).unwrap();
+                let dyn_image = dyn_image_from_raw(&image);
+                let path = "current-frame.temp.bmp"; // todo create temp folder
+                dyn_image
+                    .save(path)
+                    .unwrap_or_else(|e| eprintln!("failed to save image: {:?}", e));
+                // open::that(path).unwrap_or_else(|e| eprintln!("failed to open image: {:?}", e)); // todo; only open the first time
 
                 // 2. preprocess
                 let filtered = preprocess_image_for_tesseract(&image, trigger.filter.clone());

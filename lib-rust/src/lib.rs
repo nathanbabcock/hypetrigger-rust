@@ -3,6 +3,7 @@ extern crate derive_builder;
 
 pub mod any;
 pub mod config;
+pub mod debugger;
 pub mod emit;
 pub mod ffmpeg;
 pub mod logging;
