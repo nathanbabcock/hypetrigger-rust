@@ -18,6 +18,7 @@ pub struct WorkerThread {
 }
 
 /// Specifies all the context/state needed for a Runner to process a single frame
+#[derive(Clone)]
 pub struct RunnerContext {
     /// The config of the Job that is invoking this run
     pub config: Arc<HypetriggerConfig>,

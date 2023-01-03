@@ -4,6 +4,8 @@ use std::{
     io::stdin,
     sync::{Arc, RwLock},
 };
+
+#[derive(Clone)]
 pub struct DebuggerStep {
     /// The context of this step, including:
     /// - The config of the Job that is invoking this run
@@ -77,11 +79,11 @@ impl Debugger {
 
         // TODO optionally write to log file
 
-        Debugger::step_stdout(step);
-        Debugger::step_stdin(this_clone, step);
+        Debugger::step_stdout(&step);
+        Debugger::step_stdin(this_clone, &step);
     }
 
-    pub fn step_stdout(step: DebuggerStep) {
+    pub fn step_stdout(step: &DebuggerStep) {
         println!("[debugger] execution paused.");
         println!(" - input path: {}", step.context.config.inputPath);
         println!(" - frame number: {}", step.context.frame_num);
@@ -92,7 +94,7 @@ impl Debugger {
         );
         println!(" - current step: {}", step.description);
 
-        if let Some(image) = step.image {
+        if let Some(image) = &step.image {
             Debugger::handle_step_image(image);
         }
 
@@ -100,7 +102,7 @@ impl Debugger {
     }
 
     /// Save a temporary image to file, and log the path and dimensions to stdout
-    pub fn handle_step_image(image: DynamicImage) {
+    pub fn handle_step_image(image: &DynamicImage) {
         println!(" - current image ({}x{})", image.width(), image.height());
         // let dyn_image = dyn_image_from_raw(&image);
         let path = "current-frame.temp.bmp"; // todo create temp folder
@@ -112,7 +114,7 @@ impl Debugger {
     }
 
     /// Blocks while waiting for the user's command
-    pub fn step_stdin(_this: Arc<RwLock<Self>>, step: DebuggerStep) {
+    pub fn step_stdin(_this: Arc<RwLock<Self>>, step: &DebuggerStep) {
         println!("[debugger] press enter to continue.");
         stdin().read_line(&mut String::new()).unwrap();
     }
@@ -124,5 +126,16 @@ impl Debugger {
     /// Clears the last few lines of console output
     pub fn clear_step(_this: Arc<RwLock<Self>>, _step: DebuggerStep) {
         todo!("");
+    }
+}
+
+impl Default for Debugger {
+    fn default() -> Self {
+        Self {
+            state: DebuggerState::Resumed,
+            cur_step: None,
+            prev_step: None,
+            _debugger_config: LoggingConfig::default(),
+        }
     }
 }

@@ -8,6 +8,7 @@ use std::{
 
 use crate::{
     config::HypetriggerConfig,
+    debugger::Debugger,
     emit::OnEmit,
     ffmpeg::{
         on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
@@ -34,8 +35,8 @@ pub struct Pipeline {
     ffmpeg_exe: String,
 
     /// Turn on or off different logging channels (ffmpeg, tesseract, tensorflow, etc.)
-    #[builder(default = "LoggingConfig::default()")]
-    logging: LoggingConfig,
+    #[builder(default = "Arc::new(RwLock::new(Debugger::default()))")]
+    debugger: Arc<RwLock<Debugger>>,
 
     // --- Callbacks ---
     /// Callback that runs inside a Runner thread when a result for a frame has
