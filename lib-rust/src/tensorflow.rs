@@ -2,6 +2,7 @@ use crate::{
     config::HypetriggerConfig,
     emit::OnEmitV2,
     photon::{ensure_size, ensure_square, rgb24_to_rgba32},
+    pipeline::OnPanic,
     runner::{RunnerCommand, RunnerResultV2},
     trigger::{Crop, Trigger, Triggers},
 };
@@ -46,9 +47,15 @@ impl Trigger for TensorflowTrigger {
 
 /// - Receives: either an image to process, or an exit command
 /// - Sends: the image classification label from Tensorflow
-pub fn tensorflow_runner(rx: Receiver<RunnerCommand>, config: Arc<HypetriggerConfig>) {
+pub fn tensorflow_runner(
+    rx: Receiver<RunnerCommand>,
+    config: Arc<HypetriggerConfig>,
+    _on_panic: OnPanic,
+) {
     let saved_models: ModelMap = init_tensorflow(&config.triggers);
     // let mut consecutive_matches = init_consecutive_matches(&context.config.triggers);
+
+    // TODO use `on_panic` to gracefully shut down on fatal errors
 
     while let Ok(command) = rx.recv() {
         match command {

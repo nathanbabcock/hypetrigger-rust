@@ -2,6 +2,7 @@ use crate::{
     config::HypetriggerConfig,
     emit::OnEmitV2,
     photon::{ensure_minimum_size, rgb24_to_rgba32},
+    pipeline::OnPanic,
     runner::{RunnerCommand, RunnerResultV2},
     threshold::threshold_color_distance,
     trigger::{Crop, Trigger},
@@ -9,7 +10,7 @@ use crate::{
 use photon_rs::{helpers::dyn_image_from_raw, transform::padding_uniform, PhotonImage, Rgb, Rgba};
 use std::{
     cell::RefCell,
-    io::stdin,
+    io::{self, stdin},
     path::PathBuf,
     sync::{mpsc::Receiver, Arc},
     time::Instant,
@@ -47,7 +48,11 @@ pub struct ThresholdFilter {
 
 /// - Receives: either an image to process, or an exit command
 /// - Sends: the recognized text
-pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerConfig>) {
+pub fn tesseract_runner(
+    rx: Receiver<RunnerCommand>,
+    _config: Arc<HypetriggerConfig>,
+    on_panic: OnPanic,
+) {
     let tesseract = RefCell::new(Some(init_tesseract().unwrap()));
     println!("[tesseract] thread initialized");
 
@@ -57,27 +62,45 @@ pub fn tesseract_runner(rx: Receiver<RunnerCommand>, _config: Arc<HypetriggerCon
         match command {
             RunnerCommand::ProcessImage(context, debugger_ref) => {
                 // -1. unwrap debugger ref
-                let debugger = debugger_ref.read().unwrap();
+                let debugger = match debugger_ref.read() {
+                    Ok(debugger) => debugger,
+                    Err(e) => {
+                        return on_panic(Box::new(io::Error::new(
+                            io::ErrorKind::Other,
+                            e.to_string(),
+                        )))
+                    }
+                };
 
                 // 0. downcast to concrete Trigger type
-                let trigger = context
-                    .trigger
-                    .as_any()
-                    .downcast_ref::<TesseractTrigger>()
-                    .expect("Tesseract runner received a non-Tesseract trigger!");
+                let trigger = match context.trigger.as_any().downcast_ref::<TesseractTrigger>() {
+                    Some(trigger) => trigger,
+                    None => {
+                        return on_panic(Box::new(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "Tesseract runner received a non-Tesseract trigger!",
+                        )))
+                    }
+                };
                 let input_id = context.config.inputPath.clone();
                 let frame_num = context.frame_num;
                 let timestamp = context.get_timestamp();
 
                 // 0.5. unwrap buffer from ffmpeg
-                let vector = Arc::try_unwrap(context.image).unwrap_or_else(|arc| {
-                    eprintln!("[err] try_unwrap failed on RawImageData Arc");
-                    eprintln!(
-                        "[err] This indicates that there's more than one strong reference to the Arc"
-                    );
-                    eprintln!("[err] the Arc's internal buffer has length {}", arc.len());
-                    panic!("could not unwrap RawImageData Arc")
-                });
+                let vector = match Arc::try_unwrap(context.image) {
+                    Ok(vector) => vector,
+                    Err(arc) => {
+                        println!("[err] try_unwrap failed on RawImageData Arc");
+                        eprintln!(
+                          "[err] This indicates that there's more than one strong reference to the Arc"
+                      );
+                        eprintln!("[err] the Arc's internal buffer has length {}", arc.len());
+                        return on_panic(Box::new(io::Error::new(
+                            io::ErrorKind::Other,
+                            "could not unwrap RawImageData Arc (referenced elsewhere)",
+                        )));
+                    }
+                };
                 debugger.log(&format!("[tesseract] Received {} bytes", vector.len()));
 
                 // 1. convert raw image to photon

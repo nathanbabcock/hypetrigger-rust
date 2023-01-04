@@ -129,7 +129,12 @@ impl Pipeline {
     /// Starts a thread for the given Runner.
     /// If a thread for the given Runner already exists, nothing is changed.
     /// Runner must already be registered (e.g. a name mapped to a spawn function)
-    pub fn spawn_runner(&mut self, name: String, config: Arc<HypetriggerConfig>) {
+    pub fn spawn_runner(
+        &mut self,
+        name: String,
+        config: Arc<HypetriggerConfig>,
+        on_panic: OnPanic,
+    ) {
         if let Some(_) = self
             .runner_threads
             .read()
@@ -142,7 +147,7 @@ impl Pipeline {
             .runners
             .get(&name)
             .unwrap_or_else(|| panic!("get runner fn for {}", name));
-        let worker = spawn_runner_thread(name.clone(), runner_fn, config);
+        let worker = spawn_runner_thread(name.clone(), runner_fn, config, on_panic.clone());
         self.runner_threads
             .write()
             .expect("acquire runner threads write lock")
@@ -159,9 +164,13 @@ impl Pipeline {
     // }
 
     /// Spawns only the runners needed for a given job.
-    pub fn spawn_runners_for_config(&mut self, config: Arc<HypetriggerConfig>) {
+    pub fn spawn_runners_for_config(&mut self, config: Arc<HypetriggerConfig>, on_panic: OnPanic) {
         for trigger in &config.triggers {
-            self.spawn_runner(trigger.get_runner_type().clone(), config.clone());
+            self.spawn_runner(
+                trigger.get_runner_type().clone(),
+                config.clone(),
+                on_panic.clone(),
+            );
         }
     }
 
@@ -313,7 +322,7 @@ impl Pipeline {
 
         // Spawn runner threads
         // TODO: error handling?
-        self.spawn_runners_for_config(config_arc.clone());
+        self.spawn_runners_for_config(config_arc.clone(), on_panic.clone());
 
         // Insert job
         let job = HypetriggerJob {

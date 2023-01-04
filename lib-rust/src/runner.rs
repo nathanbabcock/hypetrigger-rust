@@ -2,6 +2,7 @@ use crate::{
     config::HypetriggerConfig,
     debugger::{Debugger, DebuggerRef},
     ffmpeg::RawImageData,
+    pipeline::OnPanic,
     trigger::Trigger,
 };
 use std::{
@@ -37,6 +38,11 @@ pub struct RunnerContext {
     /// directly to the frame number of the source video, because it is
     /// (typically) sampled at a lower framerate.
     pub frame_num: u64,
+
+    /// Worst case scenario, if there's an unrecoverable fatal error in this
+    /// thread that compromises the whole pipeline, use this method to abort the
+    /// entire job.
+    pub on_panic: OnPanic,
 }
 
 impl RunnerContext {
@@ -72,17 +78,20 @@ pub struct RunnerResultV2<T> {
     pub timestamp: f64,
 }
 
-pub type RunnerFn = fn(Receiver<RunnerCommand>, Arc<HypetriggerConfig>);
+// TODO (!) Runners don't need Config at spawn time, it comes in with Configs
+pub type RunnerFn = fn(Receiver<RunnerCommand>, Arc<HypetriggerConfig>, OnPanic);
+
 /// - Receives: either an image to process, or an exit command
 /// - Sends: the recognized text
 pub fn spawn_runner_thread(
     name: String,
     runner: RunnerFn,
     config: Arc<HypetriggerConfig>,
+    on_panic: OnPanic,
 ) -> WorkerThread {
     let (tx, rx) = sync_channel::<RunnerCommand>(0);
     let join_handle = thread::Builder::new()
         .name(name)
-        .spawn(move || runner(rx, config));
+        .spawn(move || runner(rx, config, on_panic));
     WorkerThread { tx, join_handle }
 }

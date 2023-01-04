@@ -289,6 +289,7 @@ pub fn spawn_ffmpeg_stdout_thread(
                     image: raw_image_data,
                     trigger: cur_trigger.clone(),
                     frame_num: frame_num as u64,
+                    on_panic: on_panic.clone(),
                 };
 
                 // ❔ propagate errors from inside the callback?
