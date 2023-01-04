@@ -8,6 +8,7 @@ use std::io::{self, stdin, BufRead, BufReader, Error, Read, Write};
 use std::os::windows::process::CommandExt;
 
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::Mutex;
 use std::sync::{mpsc::Receiver, Arc};
 use std::thread;
 use std::thread::JoinHandle;
@@ -353,4 +354,8 @@ pub fn spawn_ffmpeg_stdin_thread(
             //     stdin.write_all(b"q\n").expect("send quit signal");
             // }
         })
+}
+
+pub fn send_ffmpeg_stop_signal(ffmpeg_stdin: &mut ChildStdin) -> io::Result<()> {
+    ffmpeg_stdin.write_all(b"q\n")
 }

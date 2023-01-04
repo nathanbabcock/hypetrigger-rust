@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     io::{self, Write},
-    process::{ChildStdin, Stdio},
+    process::{Child, ChildStdin, Stdio},
     sync::{Arc, Mutex, RwLock},
     thread::JoinHandle,
 };
@@ -11,9 +11,10 @@ use crate::{
     debugger::{Debugger, DebuggerRef},
     emit::OnEmit,
     ffmpeg::{
-        on_ffmpeg_stderr, on_ffmpeg_stdout, spawn_ffmpeg_childprocess, spawn_ffmpeg_stderr_thread,
-        spawn_ffmpeg_stdout_thread, GetRunnerThread, OnFfmpegStderr, OnFfmpegStdout,
-        SpawnFfmpegChildprocess, SpawnFfmpegStderrThread, SpawnFfmpegStdoutThread, StdioConfig,
+        on_ffmpeg_stderr, on_ffmpeg_stdout, send_ffmpeg_stop_signal, spawn_ffmpeg_childprocess,
+        spawn_ffmpeg_stderr_thread, spawn_ffmpeg_stdout_thread, GetRunnerThread, OnFfmpegStderr,
+        OnFfmpegStdout, SpawnFfmpegChildprocess, SpawnFfmpegStderrThread, SpawnFfmpegStdoutThread,
+        StdioConfig,
     },
     runner::{spawn_runner_thread, RunnerFn, WorkerThread},
     tensorflow::TENSORFLOW_RUNNER,
@@ -201,7 +202,7 @@ impl Pipeline {
         }
         if config_arc.triggers.is_empty() {
             return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidInput,
                 "job contains no triggers".to_string(),
             ));
         }
@@ -211,34 +212,54 @@ impl Pipeline {
         let get_runner_thread: GetRunnerThread = Arc::new(move |name| -> Arc<WorkerThread> {
             runner_threads_clone
                 .read()
-                .expect("acquire runner threads read lock")
+                .expect("able to acquire lock on runner_threads (not poisoned)")
                 .get(&name)
-                .expect("get runner thread")
+                .expect("hashmap contains a runner thread with the specified id")
                 .clone()
         });
 
         // Ffmpeg childprocess
         let ffmpeg_stdio = self.ffmpeg_stdio_config();
-        let ffmpeg_childprocess = (self.spawn_ffmpeg_childprocess)(
+        let mut ffmpeg_child = (self.spawn_ffmpeg_childprocess)(
             config_arc.clone(),
             ffmpeg_stdio,
             self.ffmpeg_exe.clone(),
             self.debugger.clone(),
         )?;
-        let ffmpeg_stdin = Mutex::new(ffmpeg_childprocess.stdin);
-        let ffmpeg_stderr = ffmpeg_childprocess.stderr;
-        let ffmpeg_stdout = ffmpeg_childprocess
-            .stdout
-            .expect("ffmpeg process should have stdout channel");
+        let ffmpeg_stdin = ffmpeg_child.stdin.take();
+        let ffmpeg_stderr = ffmpeg_child.stderr.take();
+        let ffmpeg_stdout = match ffmpeg_child.stdout.take() {
+            Some(stdout) => stdout,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "ffmpeg child should always have a piped stdout channel",
+                ))
+            }
+        };
 
         // Ffmpeg stdout
-        let ffmpeg_stdout_thread = (self.spawn_ffmpeg_stdout_thread)(
+        let ffmpeg_stdout_thread = match (self.spawn_ffmpeg_stdout_thread)(
             ffmpeg_stdout,
             config_arc.clone(),
             self.debugger.clone(),
             self.on_ffmpeg_stdout.clone(),
             get_runner_thread.clone(),
-        )?;
+        ) {
+            Ok(thread) => thread,
+            Err(err) => {
+                // Clean up ffmpeg childprocess, which will now have nowhere to
+                // put its stdout. Panic if this cleanup fails (it was already
+                // plan B)
+                ffmpeg_child
+                    .kill()
+                    .expect("ffmpeg process had started normally, so it should be killable");
+                ffmpeg_child
+                    .wait()
+                    .expect("no unknown error while waiting for ffmpeg process to exit");
+                return Err(err);
+            }
+        };
 
         // Ffmpeg stderr
         // This one is tricky to unbox, since it's a Result inside an option
@@ -253,13 +274,24 @@ impl Pipeline {
         ) {
             Some(result) => match result {
                 Ok(thread) => Some(thread),
-                Err(err) => return Err(err),
+                Err(err) => {
+                    // Same thing as if stdout thread fails. In this case, the
+                    // stdout thread will automatically terminate when the
+                    // stdout channel closes.
+                    ffmpeg_child
+                        .kill()
+                        .expect("ffmpeg process had started normally, so it should be killable");
+                    ffmpeg_child
+                        .wait()
+                        .expect("no unknown error while waiting for ffmpeg process to exit");
+                    ffmpeg_stdout_thread
+                        .join()
+                        .expect("ffmpeg stdout thread shouldn't panic, and should be joinable");
+                    return Err(err);
+                }
             },
             None => None,
         };
-
-        // TODO: if we returned an error, what do we do with the other dangling
-        // threads? The childprocess?
 
         // Spawn runner threads
         // TODO: error handling?
@@ -268,7 +300,8 @@ impl Pipeline {
         // Insert job
         let job = HypetriggerJob {
             config: config_arc,
-            ffmpeg_stdin,
+            ffmpeg_child: Mutex::new(ffmpeg_child),
+            ffmpeg_stdin: Mutex::new(ffmpeg_stdin),
             ffmpeg_stderr_thread,
             ffmpeg_stdout_thread,
         };
@@ -309,6 +342,7 @@ pub fn test_builder() {
 }
 
 struct HypetriggerJob {
+    pub ffmpeg_child: Mutex<Child>,
     pub ffmpeg_stdin: Mutex<Option<ChildStdin>>,
     pub ffmpeg_stderr_thread: Option<JoinHandle<()>>,
     pub ffmpeg_stdout_thread: JoinHandle<()>,
