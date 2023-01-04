@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    error::Error,
     io::{self, Write},
     process::{Child, ChildStdin, Stdio},
     sync::{Arc, Mutex, RwLock},
@@ -23,6 +24,7 @@ use crate::{
 
 pub type Jobs = HashMap<String, HypetriggerJob>;
 pub type RunnerThreads = Arc<RwLock<HashMap<String, Arc<WorkerThread>>>>;
+pub type OnPanic = Arc<dyn Fn(Box<dyn Error>) + Send + Sync>;
 
 /// A multithreaded pipeline of execution
 ///
@@ -241,8 +243,9 @@ impl Pipeline {
         // Handler for panic within threads
         let ffmpeg_child_arc = Arc::new(Mutex::new(ffmpeg_child));
         let ffmpeg_child_clone = ffmpeg_child_arc.clone();
-        let on_panic = Arc::new(move || {
-            eprintln!("[panic] Panic in thread, killing ffmpeg childprocess...");
+        let on_panic: OnPanic = Arc::new(move |error| {
+            eprintln!("[panic] Panic in thread: {}", error);
+            eprintln!("killing ffmpeg childprocess...");
             let mut child = ffmpeg_child_clone.lock().unwrap();
             child.kill().unwrap();
             child.wait().unwrap();
@@ -283,6 +286,7 @@ impl Pipeline {
             config_arc.clone(),
             self.on_ffmpeg_stderr.clone(),
             self.debugger.clone(),
+            on_panic.clone(),
         ) {
             Some(result) => match result {
                 Ok(thread) => Some(thread),

@@ -2,6 +2,7 @@ use image::{DynamicImage, ImageBuffer};
 
 use crate::config::HypetriggerConfig;
 use crate::debugger::{Debugger, DebuggerRef, DebuggerStep};
+use crate::pipeline::OnPanic;
 use crate::runner::{RunnerCommand, RunnerContext, WorkerThread};
 
 use std::io::{self, stdin, BufRead, BufReader, Error, Read, Write};
@@ -154,6 +155,7 @@ pub type SpawnFfmpegStderrThread = Arc<
             Arc<HypetriggerConfig>,
             OnFfmpegStderr,
             DebuggerRef,
+            OnPanic,
         ) -> Option<io::Result<JoinHandle<()>>>)
         + Sync
         + Send,
@@ -175,13 +177,22 @@ pub fn spawn_ffmpeg_stderr_thread(
     config: Arc<HypetriggerConfig>,
     on_ffmpeg_stderr: OnFfmpegStderr,
     debugger: DebuggerRef,
+    on_panic: OnPanic,
 ) -> Option<Result<JoinHandle<()>, Error>> {
     on_ffmpeg_stderr.map(|on_ffmpeg_stderr| {
         thread::Builder::new()
             .name("ffmpeg_stderr".into())
             .spawn(move || {
                 let debugger_clone = debugger.clone();
-                let debugger = debugger.read().unwrap();
+                let debugger = match debugger.read() {
+                    Ok(debugger) => debugger,
+                    Err(e) => {
+                        return on_panic(Box::new(io::Error::new(
+                            io::ErrorKind::Other,
+                            e.to_string(),
+                        )))
+                    }
+                };
                 BufReader::new(stderr).lines().for_each(|line| {
                     (on_ffmpeg_stderr)(line, config.clone(), debugger_clone.clone())
                 });
