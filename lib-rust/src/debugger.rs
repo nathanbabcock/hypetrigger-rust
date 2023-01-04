@@ -2,8 +2,9 @@ use crate::{config::HypetriggerConfig, runner::RunnerContext, trigger::Trigger};
 use image::DynamicImage;
 use std::{
     env::{current_dir, current_exe},
-    fs::OpenOptions,
-    io::{stdin, Write},
+    fs::{self, OpenOptions},
+    io::{self, stdin, Write},
+    path::Path,
     sync::{Arc, RwLock},
 };
 
@@ -62,6 +63,9 @@ pub struct Debugger {
     // pub prev_step: Option<DebuggerStep>,
     pub log_to_disk: bool,
     pub log_file: String,
+
+    /// Whether the log file has been created and/or cleared from the previous run
+    log_initialized: bool,
 }
 
 impl Debugger {
@@ -106,7 +110,29 @@ impl Debugger {
         }
     }
 
-    // TODO: clear log file on init
+    /// Delete old log file, if present.
+    /// This method should only be called once per Pipeline/Debugger.
+    pub fn init_log(this: DebuggerRef) -> io::Result<()> {
+        let mut debugger = this.write().unwrap();
+        debugger.log_initialized = true;
+        // Regardless of what happens, mark the log as initialized.
+        // This method is intended as a singleton which runs only once.
+        // In other languages, it would happen in the constructor.
+        // In Rust, this struct might be created many different ways
+        // (builder pattern, Default trait, raw struct instantiation, etc).
+        // So instead, we use a flag to ensure it only runs once.
+
+        // Check for a previous log file
+        if Path::new(debugger.log_file.as_str()).exists() {
+            println!(
+                "[debugger] Deleting previous log file: {}",
+                debugger.log_file
+            );
+            fs::remove_file(debugger.log_file.clone())?;
+        }
+        println!("[debugger] Log file initialized: {}", debugger.log_file);
+        Ok(())
+    }
 
     /// Attach an entry point for the debugger to (potentially) pause and inspect
     /// the current state of execution.
@@ -187,6 +213,7 @@ impl Default for Debugger {
                 .to_str()
                 .unwrap()
                 .to_string(),
+            log_initialized: false,
             // TODO: log directory
             // TODO: image filename
         }
