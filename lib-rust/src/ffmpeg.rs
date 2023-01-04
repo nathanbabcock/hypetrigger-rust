@@ -224,6 +224,7 @@ pub type SpawnFfmpegStdoutThread = Arc<
             DebuggerRef,
             OnFfmpegStdout,
             GetRunnerThread,
+            OnPanic,
         ) -> io::Result<JoinHandle<()>>)
         + Sync
         + Send,
@@ -237,12 +238,21 @@ pub fn spawn_ffmpeg_stdout_thread(
     debugger: DebuggerRef,
     on_ffmpeg_stdout: OnFfmpegStdout,
     get_runner: GetRunnerThread,
+    on_panic: OnPanic,
 ) -> io::Result<JoinHandle<()>> {
     thread::Builder::new()
         .name("ffmpeg_stdout".into())
         .spawn(move || {
             let debugger_clone = debugger.clone();
-            let debugger = debugger.read().unwrap(); // ❗
+            let debugger = match debugger.read() {
+                Ok(debugger) => debugger,
+                Err(e) => {
+                    return on_panic(Box::new(io::Error::new(
+                        io::ErrorKind::Other,
+                        e.to_string(),
+                    )))
+                }
+            };
 
             // Init buffers
             let mut buffers: Vec<Vec<u8>> = Vec::new();
@@ -283,7 +293,12 @@ pub fn spawn_ffmpeg_stdout_thread(
 
                 // ❔ propagate errors from inside the callback?
                 // ❔ or pass an on_panic callback even deeper inside?
-                on_ffmpeg_stdout(context, get_runner.clone(), debugger_clone.clone());
+                on_ffmpeg_stdout(
+                    context,
+                    get_runner.clone(),
+                    debugger_clone.clone(),
+                    on_panic.clone(),
+                );
 
                 trigger_index += 1;
                 if trigger_index >= num_triggers {
@@ -297,11 +312,13 @@ pub fn spawn_ffmpeg_stdout_thread(
 }
 
 pub type GetRunnerThread = Arc<dyn (Fn(String) -> Arc<WorkerThread>) + Sync + Send>;
-pub type OnFfmpegStdout = Arc<dyn Fn(RunnerContext, GetRunnerThread, DebuggerRef) + Sync + Send>;
+pub type OnFfmpegStdout =
+    Arc<dyn Fn(RunnerContext, GetRunnerThread, DebuggerRef, OnPanic) + Sync + Send>;
 pub fn on_ffmpeg_stdout(
     context: RunnerContext,
     get_runner: GetRunnerThread,
     debugger: DebuggerRef,
+    on_panic: OnPanic,
 ) {
     // RawImageData to DynamicImage
     // TODO: standardize image format
@@ -346,10 +363,15 @@ pub fn on_ffmpeg_stdout(
         .as_str(),
     );
 
-    tx.send(RunnerCommand::ProcessImage(context, debugger_clone))
-        .expect("send image buffer"); // ❗ ...maybe recoverable? (unlikely)
+    match tx.send(RunnerCommand::ProcessImage(context, debugger_clone)) {
+        Ok(debugger) => debugger,
+        Err(e) => {
+            return on_panic(Box::new(e));
+        }
+    };
 }
 
+#[deprecated(note = "no thread is needed, you can just write to stdin any time you want")]
 pub fn spawn_ffmpeg_stdin_thread(
     mut stdin: ChildStdin,
     rx: Receiver<FfmpegStdinCommand>,

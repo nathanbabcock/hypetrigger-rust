@@ -259,6 +259,7 @@ impl Pipeline {
             self.debugger.clone(),
             self.on_ffmpeg_stdout.clone(),
             get_runner_thread.clone(),
+            on_panic.clone(),
         ) {
             Ok(thread) => thread,
             Err(err) => {
