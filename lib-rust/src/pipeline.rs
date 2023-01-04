@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    io::Write,
+    io::{self, Write},
     process::{ChildStdin, Stdio},
     sync::{Arc, Mutex, RwLock},
     thread::JoinHandle,
@@ -186,18 +186,27 @@ impl Pipeline {
     }
 
     /// Spawns an instance of FFMPEG, listens on stdio channels, and forwards decoded images to the appropriate Runner.
-    pub fn start_job(&mut self, job_id: String, config: HypetriggerConfig) -> Result<(), String> {
+    ///
+    /// The return result indicates the success of creating the Job, but the
+    /// execution continues in separate threads.
+    pub fn start_job(&mut self, job_id: String, config: HypetriggerConfig) -> io::Result<()> {
         let config_arc = Arc::new(config);
 
-        // validate job
+        // Validate job
         if self.jobs.contains_key(&job_id) {
-            return Err(format!("job already exists with id {}", job_id));
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("job already exists with id {}", job_id),
+            ));
         }
         if config_arc.triggers.is_empty() {
-            return Err("job contains no triggers".into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "job contains no triggers".to_string(),
+            ));
         }
 
-        // get runners
+        // Get runners
         let runner_threads_clone = self.runner_threads.clone();
         let get_runner_thread: GetRunnerThread = Arc::new(move |name| -> Arc<WorkerThread> {
             runner_threads_clone
@@ -208,50 +217,61 @@ impl Pipeline {
                 .clone()
         });
 
-        // ffmpeg childprocess
+        // Ffmpeg childprocess
         let ffmpeg_stdio = self.ffmpeg_stdio_config();
         let ffmpeg_childprocess = (self.spawn_ffmpeg_childprocess)(
             config_arc.clone(),
             ffmpeg_stdio,
             self.ffmpeg_exe.clone(),
             self.debugger.clone(),
-        )
-        .expect("spawn ffmpeg childprocess");
+        )?;
         let ffmpeg_stdin = Mutex::new(ffmpeg_childprocess.stdin);
         let ffmpeg_stderr = ffmpeg_childprocess.stderr;
         let ffmpeg_stdout = ffmpeg_childprocess
             .stdout
-            .expect("obtain ffmpeg stdout channel");
+            .expect("ffmpeg process should have stdout channel");
 
-        // ffmpeg stdout
+        // Ffmpeg stdout
         let ffmpeg_stdout_thread = (self.spawn_ffmpeg_stdout_thread)(
             ffmpeg_stdout,
             config_arc.clone(),
             self.debugger.clone(),
             self.on_ffmpeg_stdout.clone(),
             get_runner_thread.clone(),
-        )
-        .expect("spawn ffmpeg stdout thread");
+        )?;
 
-        // ffmpeg stderr
-        let ffmpeg_stderr_thread = (self.spawn_ffmpeg_stderr_thread)(
+        // Ffmpeg stderr
+        // This one is tricky to unbox, since it's a Result inside an option
+        // TODO: change this? It's un-ergonomic, and in the future we will
+        // likely need to require a stderr handler in all cases (for things like
+        // metadata and ffmpeg error detection).
+        let ffmpeg_stderr_thread = match (self.spawn_ffmpeg_stderr_thread)(
             ffmpeg_stderr.unwrap(),
             config_arc.clone(),
             self.on_ffmpeg_stderr.clone(),
             self.debugger.clone(),
-        )
-        .map(|stderr_result| stderr_result.expect("spawn ffmpeg stderr thread"));
+        ) {
+            Some(result) => match result {
+                Ok(thread) => Some(thread),
+                Err(err) => return Err(err),
+            },
+            None => None,
+        };
 
-        // runner threads
+        // TODO: if we returned an error, what do we do with the other dangling
+        // threads? The childprocess?
+
+        // Spawn runner threads
+        // TODO: error handling?
         self.spawn_runners_for_config(config_arc.clone());
 
+        // Insert job
         let job = HypetriggerJob {
             config: config_arc,
             ffmpeg_stdin,
             ffmpeg_stderr_thread,
             ffmpeg_stdout_thread,
         };
-
         self.jobs.insert(job_id, job);
 
         Ok(())

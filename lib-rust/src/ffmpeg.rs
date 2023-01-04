@@ -4,7 +4,7 @@ use crate::config::HypetriggerConfig;
 use crate::debugger::{Debugger, DebuggerRef, DebuggerStep};
 use crate::runner::{RunnerCommand, RunnerContext, WorkerThread};
 
-use std::io::{stdin, BufRead, BufReader, Error, Read, Write};
+use std::io::{self, stdin, BufRead, BufReader, Error, Read, Write};
 use std::os::windows::process::CommandExt;
 
 use std::process::{Child, ChildStderr, ChildStdin, ChildStdout, Command, Stdio};
@@ -26,7 +26,7 @@ pub struct StdioConfig {
 }
 
 pub type SpawnFfmpegChildprocess = Arc<
-    dyn (Fn(Arc<HypetriggerConfig>, StdioConfig, String, DebuggerRef) -> Result<Child, Error>)
+    dyn (Fn(Arc<HypetriggerConfig>, StdioConfig, String, DebuggerRef) -> io::Result<Child>)
         + Sync
         + Send,
 >;
@@ -65,7 +65,7 @@ pub fn spawn_ffmpeg_childprocess(
     stdio_config: StdioConfig,
     ffmpeg_exe: String,
     debugger: DebuggerRef,
-) -> Result<Child, Error> {
+) -> io::Result<Child> {
     // config parameters
     let input_video = config.inputPath.as_str();
     let samples_per_second = config.samplesPerSecond;
@@ -115,23 +115,6 @@ pub fn spawn_ffmpeg_childprocess(
         cmd.arg("-map").arg(format!("[out{}]", i));
     }
 
-    // add arguments
-    let child = cmd
-        .arg("-vsync")
-        .arg("drop")
-        .arg("-f")
-        .arg("rawvideo")
-        .arg("-pix_fmt")
-        .arg("rgb24")
-        .arg("-an")
-        .arg("-y")
-        .arg("pipe:1")
-        .stdin(stdio_config.stdin)
-        .stdout(stdio_config.stdout)
-        .stderr(stdio_config.stderr)
-        .creation_flags(0x08000000)
-        .spawn();
-
     // debug output
     debugger.log("[ffmpeg] debug command:");
     debugger.log("ffmpeg \\");
@@ -146,7 +129,21 @@ pub fn spawn_ffmpeg_childprocess(
     debugger.log("  -an -y \\");
     debugger.log("  \"scripts/frame%03d.bmp\"");
 
-    child
+    // add arguments
+    cmd.arg("-vsync")
+        .arg("drop")
+        .arg("-f")
+        .arg("rawvideo")
+        .arg("-pix_fmt")
+        .arg("rgb24")
+        .arg("-an")
+        .arg("-y")
+        .arg("pipe:1")
+        .stdin(stdio_config.stdin)
+        .stdout(stdio_config.stdout)
+        .stderr(stdio_config.stderr)
+        .creation_flags(0x08000000)
+        .spawn()
 }
 
 /// Function signature for spawning a thread to process ffmpeg stderr
@@ -156,7 +153,7 @@ pub type SpawnFfmpegStderrThread = Arc<
             Arc<HypetriggerConfig>,
             OnFfmpegStderr,
             DebuggerRef,
-        ) -> Option<Result<JoinHandle<()>, Error>>)
+        ) -> Option<io::Result<JoinHandle<()>>>)
         + Sync
         + Send,
 >;
@@ -215,7 +212,7 @@ pub type SpawnFfmpegStdoutThread = Arc<
             DebuggerRef,
             OnFfmpegStdout,
             GetRunnerThread,
-        ) -> Result<JoinHandle<()>, Error>)
+        ) -> io::Result<JoinHandle<()>>)
         + Sync
         + Send,
 >;
@@ -228,7 +225,7 @@ pub fn spawn_ffmpeg_stdout_thread(
     debugger: DebuggerRef,
     on_ffmpeg_stdout: OnFfmpegStdout,
     get_runner: GetRunnerThread,
-) -> Result<JoinHandle<()>, Error> {
+) -> io::Result<JoinHandle<()>> {
     thread::Builder::new()
         .name("ffmpeg_stdout".into())
         .spawn(move || {
