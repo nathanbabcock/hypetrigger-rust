@@ -112,9 +112,11 @@ impl Debugger {
 
     /// Delete old log file, if present.
     /// This method should only be called once per Pipeline/Debugger.
-    pub fn init_log(this: DebuggerRef) -> io::Result<()> {
-        let mut debugger = this.write().unwrap();
-        debugger.log_initialized = true;
+    pub fn init_log(mut self) -> Self {
+        match self.log_initialized {
+            true => return self,
+            false => self.log_initialized = true,
+        }
         // Regardless of what happens, mark the log as initialized.
         // This method is intended as a singleton which runs only once.
         // In other languages, it would happen in the constructor.
@@ -123,15 +125,17 @@ impl Debugger {
         // So instead, we use a flag to ensure it only runs once.
 
         // Check for a previous log file
-        if Path::new(debugger.log_file.as_str()).exists() {
-            println!(
-                "[debugger] Deleting previous log file: {}",
-                debugger.log_file
-            );
-            fs::remove_file(debugger.log_file.clone())?;
+        if Path::new(self.log_file.as_str()).exists() {
+            println!("[debugger] Deleting previous log file: {}", self.log_file);
+
+            // Handle errors internally
+            match fs::remove_file(self.log_file.clone()) {
+                Ok(_) => println!("[debugger] Deleted old log file"),
+                Err(e) => eprintln!("[debugger] Couldn't delete old log file: {}", e),
+            };
         }
-        println!("[debugger] Log file initialized: {}", debugger.log_file);
-        Ok(())
+        println!("[debugger] Log file initialized: {}", self.log_file);
+        self
     }
 
     /// Attach an entry point for the debugger to (potentially) pause and inspect
@@ -195,11 +199,10 @@ impl Debugger {
     pub fn clear_step(_this: DebuggerRef, _step: DebuggerStep) {
         todo!("");
     }
-}
 
-impl Default for Debugger {
-    fn default() -> Self {
-        Self {
+    /// Create a new default Debugger instance AND initialize the log file
+    pub fn new() -> Self {
+        let mut debugger = Self {
             state: DebuggerState::Resumed,
             // cur_step: None,
             // prev_step: None,
@@ -216,6 +219,16 @@ impl Default for Debugger {
             log_initialized: false,
             // TODO: log directory
             // TODO: image filename
-        }
+        };
+
+        // Initialize the log file. If this struct is created some other way,
+        // this will need to be called manually.
+        debugger.init_log()
+    }
+}
+
+impl Default for Debugger {
+    fn default() -> Self {
+        Self::new()
     }
 }
