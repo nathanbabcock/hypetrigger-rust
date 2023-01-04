@@ -238,6 +238,17 @@ impl Pipeline {
             }
         };
 
+        // Handler for panic within threads
+        let ffmpeg_child_arc = Arc::new(Mutex::new(ffmpeg_child));
+        let ffmpeg_child_clone = ffmpeg_child_arc.clone();
+        let on_panic = Arc::new(move || {
+            eprintln!("[panic] Panic in thread, killing ffmpeg childprocess...");
+            let mut child = ffmpeg_child_clone.lock().unwrap();
+            child.kill().unwrap();
+            child.wait().unwrap();
+            eprintln!("[panic] Ffmpeg childprocess killed");
+        });
+
         // Ffmpeg stdout
         let ffmpeg_stdout_thread = match (self.spawn_ffmpeg_stdout_thread)(
             ffmpeg_stdout,
@@ -251,10 +262,11 @@ impl Pipeline {
                 // Clean up ffmpeg childprocess, which will now have nowhere to
                 // put its stdout. Panic if this cleanup fails (it was already
                 // plan B)
-                ffmpeg_child
+                let mut child = ffmpeg_child_arc.lock().unwrap();
+                child
                     .kill()
                     .expect("ffmpeg process had started normally, so it should be killable");
-                ffmpeg_child
+                child
                     .wait()
                     .expect("no unknown error while waiting for ffmpeg process to exit");
                 return Err(err);
@@ -278,10 +290,11 @@ impl Pipeline {
                     // Same thing as if stdout thread fails. In this case, the
                     // stdout thread will automatically terminate when the
                     // stdout channel closes.
-                    ffmpeg_child
+                    let mut child = ffmpeg_child_arc.lock().unwrap();
+                    child
                         .kill()
                         .expect("ffmpeg process had started normally, so it should be killable");
-                    ffmpeg_child
+                    child
                         .wait()
                         .expect("no unknown error while waiting for ffmpeg process to exit");
                     ffmpeg_stdout_thread
@@ -300,7 +313,7 @@ impl Pipeline {
         // Insert job
         let job = HypetriggerJob {
             config: config_arc,
-            ffmpeg_child: Mutex::new(ffmpeg_child),
+            ffmpeg_child: ffmpeg_child_arc,
             ffmpeg_stdin: Mutex::new(ffmpeg_stdin),
             ffmpeg_stderr_thread,
             ffmpeg_stdout_thread,
@@ -310,6 +323,7 @@ impl Pipeline {
         Ok(())
     }
 
+    // TODO should return a result type
     pub fn stop_job(&mut self, job_id: String) {
         let job = self.jobs.remove(&job_id).expect("remove job from hashmap");
         let ffmpeg_stdin = job.ffmpeg_stdin.lock().unwrap();
@@ -342,7 +356,7 @@ pub fn test_builder() {
 }
 
 struct HypetriggerJob {
-    pub ffmpeg_child: Mutex<Child>,
+    pub ffmpeg_child: Arc<Mutex<Child>>,
     pub ffmpeg_stdin: Mutex<Option<ChildStdin>>,
     pub ffmpeg_stderr_thread: Option<JoinHandle<()>>,
     pub ffmpeg_stdout_thread: JoinHandle<()>,

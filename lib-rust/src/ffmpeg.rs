@@ -231,7 +231,7 @@ pub fn spawn_ffmpeg_stdout_thread(
         .name("ffmpeg_stdout".into())
         .spawn(move || {
             let debugger_clone = debugger.clone();
-            let debugger = debugger.read().unwrap();
+            let debugger = debugger.read().unwrap(); // ❗
 
             // Init buffers
             let mut buffers: Vec<Vec<u8>> = Vec::new();
@@ -250,6 +250,7 @@ pub fn spawn_ffmpeg_stdout_thread(
             let mut trigger_index = 0;
             let num_triggers = config.triggers.len();
             while stdout.read_exact(&mut buffers[trigger_index]).is_ok() {
+                // ❔ note errors here?
                 debugger.log(
                     format!(
                         "[ffmpeg.stdout] Read {} bytes",
@@ -269,7 +270,10 @@ pub fn spawn_ffmpeg_stdout_thread(
                     frame_num: frame_num as u64,
                 };
 
+                // ❔ propagate errors from inside the callback?
+                // ❔ or pass an on_panic callback even deeper inside?
                 on_ffmpeg_stdout(context, get_runner.clone(), debugger_clone.clone());
+
                 trigger_index += 1;
                 if trigger_index >= num_triggers {
                     trigger_index = 0;
@@ -332,7 +336,7 @@ pub fn on_ffmpeg_stdout(
     );
 
     tx.send(RunnerCommand::ProcessImage(context, debugger_clone))
-        .expect("send image buffer");
+        .expect("send image buffer"); // ❗ ...maybe recoverable? (unlikely)
 }
 
 pub fn spawn_ffmpeg_stdin_thread(
