@@ -111,7 +111,6 @@ impl Debugger {
     }
 
     /// Delete old log file, if present.
-    /// This method should only be called once per Pipeline/Debugger.
     pub fn init_log(mut self) -> Self {
         match self.log_initialized {
             true => return self,
