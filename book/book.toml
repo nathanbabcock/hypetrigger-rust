@@ -1,0 +1,6 @@
+[book]
+authors = ["nbabcock"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Hypetrigger Docs"
