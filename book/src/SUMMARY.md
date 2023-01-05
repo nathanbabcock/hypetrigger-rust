@@ -4,6 +4,7 @@
 - [Hello World in Rust](./hello-world.md)
 - [Javascript/Typescript library](./wasm.md)
 - [Using with other languages](./other-languages.md)
+- [Input video formats](./input-video.md)
 - [What are Triggers?](./triggers/what-are-triggers.md)
   - [Tesseract (Text Recognition)](./triggers/tesseract-triggers.md)
   - [Tensorflow (Image Recognition)](./triggers/tensorflow-triggers.md)
