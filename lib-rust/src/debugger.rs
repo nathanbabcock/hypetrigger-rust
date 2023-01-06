@@ -48,10 +48,10 @@ pub enum DebuggerState {
     Paused,
 
     /// Skipping steps until the next input frame
-    JumpingToNextFrame,
+    // JumpingToNextFrame,
 
     /// Skipping steps until reaching a different Trigger invocation
-    JumpingToNextTrigger,
+    // JumpingToNextTrigger,
 
     /// Freely running until manually paused by `Debugger::pause()`
     Resumed,
@@ -75,11 +75,11 @@ impl Debugger {
         this.write().unwrap().state = DebuggerState::Paused;
     }
 
-    /// Pauses the debugger (at the next step/breakpoint), then blocks and waits
-    /// for user input
+    /// Disable the debugger and continue execution without breakpoints
     pub fn resume(this: DebuggerRef) {
         let mut debugger = this.write().unwrap();
         debugger.state = DebuggerState::Resumed;
+        println!("[debugger] Resuming...");
         // debugger.cur_step = None;
         // debugger.prev_step = None;
     }
@@ -152,52 +152,75 @@ impl Debugger {
         // TODO optionally write to log file
 
         Debugger::step_stdout(&step);
-        Debugger::step_stdin(this_clone, &step);
+        Debugger::step_stdin(this_clone);
     }
 
     pub fn step_stdout(step: &DebuggerStep) {
-        println!("[debugger] execution paused.");
-        println!(" - input path: {}", step.config.inputPath);
-        println!(" - frame number: {}", step.frame_num);
-        // println!(" - timestamp: {}", step.get_timestamp()); // TODO lost in time
-        println!(" - trigger type: {}", step.trigger.get_runner_type());
-        println!(" - current step: {}", step.description);
+        let input_path = Path::new(step.config.inputPath.as_str());
+        let input_filename = input_path.file_name().unwrap().to_str().unwrap();
+        println!(
+            "[debugger] execution paused. {}, frame {}",
+            input_filename, step.frame_num
+        );
+        println!(" > Current step: {}", step.description);
 
-        if let Some(image) = &step.image {
-            Debugger::handle_step_image(image);
-        }
-
+        // Handle image
+        let image_path = match &step.image {
+            Some(image) => {
+                let dir = current_exe().unwrap();
+                let image_path_buf = dir.parent().unwrap().join("current-frame.tmp.bmp");
+                let image_path_str = image_path_buf.as_os_str().to_str().unwrap();
+                image
+                    .save(image_path_str)
+                    .unwrap_or_else(|e| eprintln!("failed to save image: {:?}", e));
+                image_path_str.to_string()
+            }
+            None => "(none)".to_string(),
+        };
+        println!(" > Preview: {}", image_path);
         // TODO: make these more compact, with colors, and cleared afterwards
     }
 
-    /// Save a temporary image to file, and log the path and dimensions to stdout
-    pub fn handle_step_image(image: &RgbImage) {
-        let (width, height) = image.dimensions();
-        println!(" - current image ({}x{})", width, height);
-        let dir = current_exe().unwrap();
-        let path_buf = dir.parent().unwrap().join("current-frame.tmp.bmp");
-        let path = path_buf.as_os_str().to_str().unwrap();
-        // TODO make this configurable at a higher scope
-        // TODO create temp folder
-        image
-            .save(path)
-            .unwrap_or_else(|e| eprintln!("failed to save image: {:?}", e));
-        println!(" - image path: {}", path);
-    }
-
     /// Blocks while waiting for the user's command
-    pub fn step_stdin(_this: DebuggerRef, step: &DebuggerStep) {
-        println!("[debugger] press enter to continue.");
-        stdin().read_line(&mut String::new()).unwrap();
+    pub fn step_stdin(this: DebuggerRef) {
+        println!("[debugger] Enter command to continue: step (s), resume (r)");
+        let mut command: String = "".into();
+        stdin().read_line(&mut command).unwrap();
+        match command.trim() {
+            "step" | "s" => Debugger::step(this),
+            // "next_trigger" | "nt" => Debugger::next_trigger(this),
+            // "next_frame" | "nf" => Debugger::next_frame(this),
+            "resume" | "r" => Debugger::resume(this),
+            _ => {
+                println!("[debugger] Unrecognized command: {}", command);
+                Debugger::step_stdin(this);
+            }
+        }
     }
 
-    pub fn handle_command(_this: DebuggerRef, _command: &str) {
-        todo!("");
+    /// Continue execution until the next breakpoint
+    pub fn step(this: DebuggerRef) {
+        // Debugger is already paused, so it will automatically stop at the next
+        // available step breakpoint
+        Debugger::clear_step(this);
     }
+
+    // /// Skip all breakpoints until we begin a new Trigger execution
+    // pub fn next_trigger(this: DebuggerRef) {
+    //     let mut debugger = this.write().unwrap();
+    //     debugger.state = DebuggerState::JumpingToNextTrigger;
+    // }
+
+    // /// Skip all breakpoints until we reach the next frame from the input media
+    // pub fn next_frame(this: DebuggerRef) {
+    //     let mut debugger = this.write().unwrap();
+    //     debugger.state = DebuggerState::JumpingToNextFrame;
+    // }
 
     /// Clears the last few lines of console output
-    pub fn clear_step(_this: DebuggerRef, _step: DebuggerStep) {
-        todo!("");
+    pub fn clear_step(this: DebuggerRef) {
+        // seems like this might be harder than intially expected...
+        // skip for now!
     }
 
     /// Create a new default Debugger instance AND initialize the log file
