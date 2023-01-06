@@ -1,5 +1,6 @@
 use crate::{
     config::HypetriggerConfig,
+    debugger::{Debugger, DebuggerStep},
     emit::OnEmitV2,
     photon::{ensure_minimum_size, rgb24_to_rgba32},
     pipeline::OnPanic,
@@ -7,7 +8,11 @@ use crate::{
     threshold::threshold_color_distance,
     trigger::{Crop, Trigger},
 };
-use photon_rs::{helpers::dyn_image_from_raw, transform::padding_uniform, PhotonImage, Rgb, Rgba};
+use photon_rs::{
+    helpers::{self, dyn_image_from_raw},
+    transform::padding_uniform,
+    PhotonImage, Rgb, Rgba,
+};
 use std::{
     cell::RefCell,
     io::{self, stdin},
@@ -106,6 +111,19 @@ pub fn tesseract_runner(
                 // 1. convert raw image to photon
                 let rgba32 = rgb24_to_rgba32(vector);
                 let image = PhotonImage::new(rgba32, trigger.crop.width, trigger.crop.height);
+
+                // Register a potential breakpoint
+                let dyn_image = helpers::dyn_image_from_raw(&image).to_rgb8();
+                Debugger::register_step(
+                    debugger_ref.clone(),
+                    DebuggerStep {
+                        config: context.config.clone(),
+                        trigger: context.trigger.clone(),
+                        frame_num: context.frame_num,
+                        description: "Tesseract received image".into(),
+                        image: Some(dyn_image),
+                    },
+                );
 
                 // 2. preprocess
                 let filtered = preprocess_image_for_tesseract(&image, trigger.filter.clone());

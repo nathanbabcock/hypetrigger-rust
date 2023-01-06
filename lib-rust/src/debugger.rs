@@ -1,5 +1,5 @@
 use crate::{config::HypetriggerConfig, runner::RunnerContext, trigger::Trigger};
-use image::DynamicImage;
+use image::{DynamicImage, RgbImage};
 use std::{
     env::{current_dir, current_exe},
     fs::{self, OpenOptions},
@@ -41,7 +41,7 @@ pub struct DebuggerStep {
     /// An optional image representation of the current step of the pipeline
     /// Can be written to disk for debugging purposes
     /// In the case of non-image steps (e.g. text or regex parsing), this will be None
-    pub image: Option<DynamicImage>,
+    pub image: Option<RgbImage>,
 }
 pub enum DebuggerState {
     /// Blocking, waiting for user commands on stdin
@@ -71,7 +71,7 @@ pub struct Debugger {
 impl Debugger {
     /// Pauses the debugger (at the next step/breakpoint), then blocks and waits
     /// for user input
-    pub fn pause(this: DebuggerRef) {
+    pub fn pause(this: &DebuggerRef) {
         this.write().unwrap().state = DebuggerState::Paused;
     }
 
@@ -171,8 +171,9 @@ impl Debugger {
     }
 
     /// Save a temporary image to file, and log the path and dimensions to stdout
-    pub fn handle_step_image(image: &DynamicImage) {
-        println!(" - current image ({}x{})", image.width(), image.height());
+    pub fn handle_step_image(image: &RgbImage) {
+        let (width, height) = image.dimensions();
+        println!(" - current image ({}x{})", width, height);
         let dir = current_exe().unwrap();
         let path_buf = dir.parent().unwrap().join("current-frame.tmp.bmp");
         let path = path_buf.as_os_str().to_str().unwrap();

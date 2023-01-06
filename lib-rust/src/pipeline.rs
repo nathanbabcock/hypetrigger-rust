@@ -34,11 +34,11 @@ pub struct Pipeline {
     // --- Config params ---
     /// Path to the FFMPEG executable (defaults to "ffmpeg" command in system PATH)
     #[builder(default = "\"ffmpeg\".into()")]
-    ffmpeg_exe: String,
+    pub ffmpeg_exe: String,
 
     /// Turn on or off different logging channels (ffmpeg, tesseract, tensorflow, etc.)
     #[builder(default = "Arc::new(RwLock::new(Debugger::default()))")]
-    debugger: DebuggerRef,
+    pub debugger: DebuggerRef,
 
     // --- Callbacks ---
     /// Callback that runs inside a Runner thread when a result for a frame has

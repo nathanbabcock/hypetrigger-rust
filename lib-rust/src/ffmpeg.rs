@@ -338,18 +338,18 @@ pub fn on_ffmpeg_stdout(
     // .unwrap();
     // let dynamic_image = DynamicImage::ImageRgb8(image_buffer);
 
-    // Register a potential breakpoint
-    Debugger::register_step(
-        debugger.clone(),
-        DebuggerStep {
-            config: context.config.clone(),
-            trigger: context.trigger.clone(),
-            frame_num: context.frame_num,
-            description: "Received frame from ffmpeg".into(),
-            // image: Some(dynamic_image),
-            image: None,
-        },
-    );
+    // // Register a potential breakpoint
+    // Debugger::register_step(
+    //     debugger.clone(),
+    //     DebuggerStep {
+    //         config: context.config.clone(),
+    //         trigger: context.trigger.clone(),
+    //         frame_num: context.frame_num,
+    //         description: "Received frame from ffmpeg".into(),
+    //         // image: Some(dynamic_image),
+    //         image: None,
+    //     },
+    // );
 
     let tx_name = &context.trigger.get_runner_type();
     let tx = get_runner(tx_name.clone()).tx.clone();
