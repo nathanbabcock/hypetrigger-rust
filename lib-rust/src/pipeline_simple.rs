@@ -1,125 +1,153 @@
+use photon_rs::PhotonImage;
+use tesseract::Tesseract;
+
 use crate::config::HypetriggerConfig;
+use crate::ffmpeg::RawImageData;
+use crate::tesseract::init_tesseract;
 use std::os::windows::process::CommandExt;
 use std::process::Stdio;
+use std::sync::Mutex;
 use std::{
     io,
     process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
 };
 
-//// Job
-pub struct HypetriggerJob {
-    pub config: HypetriggerConfig,
-    pub ffmpeg_child: Child,
-    pub ffmpeg_stdin: Option<ChildStdin>,
-    pub ffmpeg_stdout: Option<ChildStdout>,
-    pub ffmpeg_stderr: Option<ChildStderr>,
+//// Image processing
+
+pub struct ThresholdFilter {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub threshold: u8,
 }
 
+impl ThresholdFilter {
+    pub fn filter_image(&self, image: PhotonImage) {
+        todo!();
+    }
+}
+
+pub struct Crop {
+    pub left_percent: f64,
+    pub top_percent: f64,
+    pub width_percent: f64,
+    pub height_percent: f64,
+}
+
+impl Crop {
+    pub fn crop_image(&self, image: PhotonImage) {
+        todo!();
+    }
+}
+
+//// Triggers
+pub trait Trigger {
+    fn run(&self, frame: RawImageData) -> Result<(), String>;
+}
+
+pub struct TesseractTrigger {
+    tesseract: Mutex<Tesseract>,
+    crop: Crop,
+    threshold_filter: ThresholdFilter,
+}
+
+impl Trigger for TesseractTrigger {
+    fn run(&self, frame: RawImageData) -> Result<(), String> {
+        Err("not implemented".to_string())
+    }
+}
+
+// //// Job (remove this?)
+// pub struct HypetriggerJob {
+//     pub config: HypetriggerConfig,
+//     pub ffmpeg_child: Child,
+//     pub ffmpeg_stdin: Option<ChildStdin>,
+//     pub ffmpeg_stdout: Option<ChildStdout>,
+//     pub ffmpeg_stderr: Option<ChildStderr>,
+// }
+
 //// Pipeline
+#[derive(Default)]
+pub struct Hypetrigger {
+    // Path the the ffmpeg binary or command to use
+    pub ffmpeg_exe: String,
 
-pub struct PipelineSimple;
+    /// Path to input video (or image) for ffmpeg
+    pub input: String,
 
-impl PipelineSimple {
-    /// Path to the FFMPEG executable (defaults to "ffmpeg" command in system PATH)
-    pub fn get_ffmpeg_exe(&self) -> String {
-        "ffmpeg".to_string()
+    /// Framerate to sample the input video at.
+    /// This can (an should) by much lower than the input video's native framerate.
+    /// 2-4 frames per second is more than sufficient to capture most events.
+    pub fps: u64,
+
+    /// List of all callback functions to run on each frame of the video
+    pub triggers: Vec<Box<dyn Trigger>>,
+}
+
+impl Hypetrigger {
+    // --- Getters and setters ---
+    /// Setter for the ffmpeg binary or command to use
+    pub fn set_ffmpeg_exe(&mut self, ffmpeg_exe: String) -> &mut Self {
+        self.ffmpeg_exe = ffmpeg_exe;
+        self
     }
 
-    pub fn spawn_ffmpeg_childprocess(&self, config: &HypetriggerConfig) -> io::Result<Child> {
-        // config parameters
-        let input_video = config.inputPath.as_str();
-        let samples_per_second = config.samplesPerSecond;
-        let num_triggers = config.triggers.len();
-
-        // construct filter graph
-        let mut filter_complex: String =
-            format!("[0:v]fps={},split={}", samples_per_second, num_triggers);
-        for i in 0..num_triggers {
-            filter_complex.push_str(format!("[in{}]", i).as_str());
-        }
-        filter_complex.push(';');
-        for i in 0..num_triggers {
-            let trigger = &config.triggers[i];
-            let in_w = trigger.get_crop().width;
-            let in_h = trigger.get_crop().height;
-            let x = trigger.get_crop().x;
-            let y = trigger.get_crop().y;
-
-            filter_complex.push_str(
-                format!(
-                    "[in{}]crop={}:{}:{}:{}:exact=1[out{}]",
-                    i, in_w, in_h, x, y, i
-                )
-                .as_str(),
-            );
-            if i < num_triggers - 1 {
-                filter_complex.push(';');
-            }
-        }
-
-        // retrieve ffmpeg path
-        let ffmpeg_path = self.get_ffmpeg_exe();
-        println!("[ffmpeg] using exe: {}", ffmpeg_path);
-
-        // spawn command
-        let mut cmd = Command::new(ffmpeg_path);
-        cmd.arg("-hwaccel")
-            .arg("auto")
-            .arg("-i")
-            .arg(input_video)
-            .arg("-filter_complex")
-            .arg(filter_complex.clone());
-
-        for i in 0..num_triggers {
-            cmd.arg("-map").arg(format!("[out{}]", i));
-        }
-
-        // debug output
-        // TODO rewrite to a self.debug_ffmpeg_command() function
-        // (or utility function) that iterates over the args and prints them
-        println!("[ffmpeg] debug command:");
-        println!("ffmpeg \\");
-        println!("  -hwaccel auto \\");
-        println!("  -i \"{}\" \\", input_video);
-        println!("  -filter_complex \"{}\" \\", filter_complex);
-        for i in 0..num_triggers {
-            println!("  -map [out{}] \\", i);
-        }
-        println!("  -vsync drop \\");
-        println!("  -vframes {} \\", num_triggers * 5);
-        println!("  -an -y \\");
-        println!("  \"scripts/frame%03d.bmp\"");
-
-        // add arguments
-        cmd.arg("-vsync")
-            .arg("drop")
-            .arg("-f")
-            .arg("rawvideo")
-            .arg("-pix_fmt")
-            .arg("rgb24")
-            .arg("-an")
-            .arg("-y")
-            .arg("pipe:1")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .creation_flags(0x08000000)
-            .spawn()
+    /// Setter for the input video (or image) for ffmpeg
+    pub fn set_input(&mut self, input: String) -> &mut Self {
+        self.input = input;
+        self
     }
 
-    pub fn start_job(&self, config: HypetriggerConfig) -> Result<HypetriggerJob, io::Error> {
-        let mut ffmpeg_child = self.spawn_ffmpeg_childprocess(&config)?;
-        let ffmpeg_stdin = ffmpeg_child.stdin.take();
-        let ffmpeg_stderr = ffmpeg_child.stderr.take();
-        let ffmpeg_stdout = ffmpeg_child.stdout.take();
-
-        let job = HypetriggerJob {
-            config,
-            ffmpeg_child,
-            ffmpeg_stdin,
-            ffmpeg_stderr,
-            ffmpeg_stdout,
-        };
-        Ok(job)
+    /// Setter for the framerate to sample the input video at.
+    pub fn set_fps(&mut self, fps: u64) -> &mut Self {
+        self.fps = fps;
+        self
     }
+
+    /// Add a Trigger to be run on every frame of the input
+    pub fn add_trigger(&mut self, trigger: Box<dyn Trigger>) -> &mut Self {
+        self.triggers.push(trigger);
+        self
+    }
+
+    // --- Constructor ---
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    // --- Behavior ---
+    /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
+    pub fn run(&self) -> Result<(), String> {
+        Err("Not implemented".to_string())
+    }
+}
+
+pub fn _main() -> Result<(), String> {
+    let tesseract = Mutex::new(match init_tesseract() {
+        Ok(tesseract) => tesseract,
+        Err(e) => return Err(e.to_string()),
+    });
+
+    let trigger = TesseractTrigger {
+        tesseract,
+        crop: Crop {
+            left_percent: 0.0,
+            top_percent: 0.0,
+            width_percent: 100.0,
+            height_percent: 100.0,
+        },
+        threshold_filter: ThresholdFilter {
+            r: 255,
+            g: 255,
+            b: 255,
+            threshold: 42,
+        },
+    };
+
+    Hypetrigger::new()
+        .set_ffmpeg_exe("ffmpeg".to_string())
+        .set_input("test.mp4".to_string())
+        .set_fps(2)
+        .add_trigger(Box::new(trigger))
+        .run()
 }
