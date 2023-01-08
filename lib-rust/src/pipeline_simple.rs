@@ -1,19 +1,9 @@
+use crate::tesseract::init_tesseract;
 use photon_rs::PhotonImage;
+use std::sync::Mutex;
 use tesseract::Tesseract;
 
-use crate::config::HypetriggerConfig;
-use crate::ffmpeg::RawImageData;
-use crate::tesseract::init_tesseract;
-use std::os::windows::process::CommandExt;
-use std::process::Stdio;
-use std::sync::Mutex;
-use std::{
-    io,
-    process::{Child, ChildStderr, ChildStdin, ChildStdout, Command},
-};
-
 //// Image processing
-
 pub struct ThresholdFilter {
     pub r: u8,
     pub g: u8,
@@ -40,11 +30,22 @@ impl Crop {
     }
 }
 
-//// Triggers
-pub trait Trigger {
-    fn run(&self, frame: RawImageData) -> Result<(), String>;
+/// Represents a single frame of the input, including the raw image pixels as
+/// well as the time it appears in the input (frame_num and/or timestamp)
+struct Frame {
+    width: u64,
+    height: u64,
+    image: Vec<u8>,
+    frame_num: u64,
+    timestamp: u64,
 }
 
+//// Triggers
+pub trait Trigger {
+    fn run(&self, frame: Frame) -> Result<(), String>;
+}
+
+//// Tesseract
 pub struct TesseractTrigger {
     tesseract: Mutex<Tesseract>,
     crop: Crop,
@@ -52,19 +53,10 @@ pub struct TesseractTrigger {
 }
 
 impl Trigger for TesseractTrigger {
-    fn run(&self, frame: RawImageData) -> Result<(), String> {
+    fn run(&self, frame: Frame) -> Result<(), String> {
         Err("not implemented".to_string())
     }
 }
-
-// //// Job (remove this?)
-// pub struct HypetriggerJob {
-//     pub config: HypetriggerConfig,
-//     pub ffmpeg_child: Child,
-//     pub ffmpeg_stdin: Option<ChildStdin>,
-//     pub ffmpeg_stdout: Option<ChildStdout>,
-//     pub ffmpeg_stderr: Option<ChildStderr>,
-// }
 
 //// Pipeline
 #[derive(Default)]
