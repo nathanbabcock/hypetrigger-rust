@@ -1,5 +1,6 @@
 use crate::tesseract::init_tesseract;
 use photon_rs::PhotonImage;
+use regex::Regex;
 use std::io::BufReader;
 use std::os::windows::process::CommandExt;
 use std::process::ChildStderr;
@@ -103,8 +104,8 @@ impl Trigger for ThreadTrigger {
     }
 }
 
-/// A separate thread that runs one or more ThreadedTriggers,
-/// by receiving them over a channel, paired with the frame to process.
+/// A separate thread that runs one or more ThreadedTriggers, by receiving them
+/// over a channel, paired with the frame to process.
 pub struct RunnerThread {
     // rx: Receiver<RunnerPayload>,
     pub tx: SyncSender<RunnerPayload>,
@@ -137,9 +138,9 @@ pub struct Hypetrigger {
     /// Path to input video (or image) for ffmpeg
     pub input: String,
 
-    /// Framerate to sample the input video at.
-    /// This can (an should) by much lower than the input video's native framerate.
-    /// 2-4 frames per second is more than sufficient to capture most events.
+    /// Framerate to sample the input video at. This can (an should) by much
+    /// lower than the input video's native framerate. 2-4 frames per second is
+    /// more than sufficient to capture most events.
     pub fps: u64,
 
     /// List of all callback functions to run on each frame of the video
@@ -212,15 +213,25 @@ impl Hypetrigger {
         };
 
         // Spawn a thread to read stderr from ffmpeg
-        let ffmpeg_stderr_thread = match self.spawn_ffmpeg_stderr_thread(ffmpeg_stderr) {
-            Ok(ffmpeg_stderr_thread) => ffmpeg_stderr_thread,
-            Err(e) => {
-                ffmpeg_child
-                    .kill()
-                    .expect("able to stop ffmpeg process if something goes wrong");
-                return Err(e.to_string());
-            }
-        };
+        let (output_size_rx, ffmpeg_stderr_join_handle) =
+            match self.spawn_ffmpeg_stderr_thread(ffmpeg_stderr) {
+                Ok(ffmpeg_stderr_thread) => ffmpeg_stderr_thread,
+                Err(e) => {
+                    ffmpeg_child
+                        .kill()
+                        .expect("able to stop ffmpeg process if something goes wrong");
+                    return Err(e.to_string());
+                }
+            };
+
+        // Block on each line of ffmpeg stderr until receiving the output size
+        let (output_width, output_height) = output_size_rx.recv().map_err(|_| {
+          "ffmpeg exited before sending output size. This is likely due to an invalid input file.".to_string()
+        })?;
+        println!(
+            "[ffmpeg] Parsed output size from logs: {}x{}",
+            output_width, output_height
+        );
 
         // Block until ffmpeg finishes
         let ffmpeg_exit_status = match ffmpeg_child.wait() {
@@ -266,29 +277,59 @@ impl Hypetrigger {
 
     /// Spawns a thread to handle reading the stderr channel from ffmpeg.
     ///
-    /// After first spawning, we read the metadata/prelude of the ffmpeg job
-    /// in order to determine the width and height of the output frames.
-    /// That's sent back to the main thread via a channel.
-    /// After the metadata is received, the channel closes, while the stderr
-    /// handler thread continues to run in the background. It automatically
-    /// stops after ffmpeg exits.
+    /// After first spawning, we read the metadata/prelude of the ffmpeg job in
+    /// order to determine the width and height of the output frames. That's
+    /// sent back to the main thread via a channel. After the metadata is
+    /// received, the channel closes, while the stderr handler thread continues
+    /// to run in the background. It automatically stops after ffmpeg exits.
     pub fn spawn_ffmpeg_stderr_thread(
         &self,
         ffmpeg_stderr: ChildStderr,
-    ) -> io::Result<(Sender<String>, JoinHandle<()>)> {
-        let (tx, rx) = channel::<String>();
+    ) -> io::Result<(Receiver<(u32, u32)>, JoinHandle<()>)> {
+        let (output_size_tx, output_size_rx) = channel::<(u32, u32)>();
 
         let join_handle = thread::Builder::new()
             .name("ffmpeg_stderr".to_string())
             .spawn(move || {
-                BufReader::new(ffmpeg_stderr).lines().for_each(|line| {
-                    println!("[ffmpeg.err] {}", line.unwrap());
-                });
+                let mut reader = BufReader::new(ffmpeg_stderr);
+                let mut line = String::new();
+                let mut current_section = "";
+                let mut output_size: Option<(u32, u32)> = None;
+                loop {
+                    // Rust docs claim this isn't necessary, but the buffer
+                    // never gets cleared!
+                    line = "".to_string();
+
+                    match reader.read_line(&mut line) {
+                        Ok(0) => {
+                            break; // (EOF)
+                        }
+                        Ok(_) => {
+                            // Parse for output size if not already found
+                            if output_size.is_none() {
+                                if line.starts_with("Output #") {
+                                    current_section = "Output"; // stringly-typed rather than enum for convenience
+                                } else if current_section == "Output" {
+                                    if let Some(size) = parse_ffmpeg_output_size(line.as_str()) {
+                                        output_size = Some(size); // remember this, so we don't check for it anymore
+                                        output_size_tx.send(size).unwrap();
+                                    }
+                                }
+                            }
+
+                            // Regular callback on every line of stderr
+                            println!("[ffmpeg.err] {}", line.trim_end());
+                            // TODO: switch this to `self.on_ffmpeg_stderr`
+                            // callback (possible in a scoped thread)
+                        }
+                        Err(_) => todo!(), // TODO
+                    }
+                }
 
                 println!("[ffmpeg.err] ffmpeg stderr thread exiting");
             })?;
 
-        Ok((tx, join_handle))
+        Ok((output_size_rx, join_handle))
     }
 }
 
@@ -357,11 +398,13 @@ pub fn _main_threaded() -> Result<(), String> {
 
 //// Utilities
 
-/// Convert a Command to a string that can be run in a shell (for debug purposes).
+/// Convert a Command to a string that can be run in a shell (for debug
+/// purposes).
 ///
 /// It's tailored to the `ffmpeg` command, such that it pairs up groups of
-/// arguments prefixed with dashes with their corresponding values (e.g. `-i` and `input.mp4`),
-/// and splits them onto multiple (escaped) lines for readibility.
+/// arguments prefixed with dashes with their corresponding values (e.g. `-i`
+/// and `input.mp4`), and splits them onto multiple (escaped) lines for
+/// readibility.
 pub fn command_to_string(cmd: &Command) -> String {
     let mut command_string = String::new();
     command_string.push_str(cmd.get_program().to_str().unwrap());
@@ -378,4 +421,25 @@ pub fn command_to_string(cmd: &Command) -> String {
     }
 
     command_string
+}
+
+/// Parses a line of ffmpeg stderr output, looking for the video size.
+/// We're looking for a line like this:
+///
+/// ```
+///   Stream #0:0(und): Video: rawvideo (RGB[24] / 0x18424752), rgb24(pc, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], q=2-31, 99532 kb/s, 2 fps, 2 tbn (default)
+/// ```
+pub fn parse_ffmpeg_output_size(text: &str) -> Option<(u32, u32)> {
+    lazy_static! {
+        static ref REGEX_SIZE: Regex = Regex::new(r"  Stream .* Video: .* (\d+)x(\d+),? ").unwrap();
+    }
+
+    match REGEX_SIZE.captures(text) {
+        Some(capture) => {
+            let width = capture.get(1).unwrap().as_str().parse::<u32>().unwrap();
+            let height = capture.get(2).unwrap().as_str().parse::<u32>().unwrap();
+            Some((width, height))
+        }
+        None => None,
+    }
 }

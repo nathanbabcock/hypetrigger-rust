@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate derive_builder;
 
+#[macro_use]
+extern crate lazy_static;
+
 pub mod any;
 pub mod config;
 pub mod debugger;
