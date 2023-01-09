@@ -10,7 +10,7 @@ pub mod logging;
 pub mod main_thread;
 pub mod photon;
 pub mod pipeline;
-mod pipeline_simple;
+pub mod pipeline_simple;
 pub mod runner;
 pub mod tensorflow;
 pub mod tesseract;

@@ -1,6 +1,9 @@
 use crate::tesseract::init_tesseract;
 use photon_rs::PhotonImage;
+use std::os::windows::process::CommandExt;
 use std::{
+    io,
+    process::{Child, Command, Stdio},
     sync::{
         mpsc::{Receiver, SyncSender},
         Arc, Mutex,
@@ -38,12 +41,12 @@ impl Crop {
 
 /// Represents a single frame of the input, including the raw image pixels as
 /// well as the time it appears in the input (frame_num and/or timestamp)
-struct Frame {
-    width: u64,
-    height: u64,
-    image: Vec<u8>,
-    frame_num: u64,
-    timestamp: u64,
+pub struct Frame {
+    pub width: u64,
+    pub height: u64,
+    pub image: Vec<u8>,
+    pub frame_num: u64,
+    pub timestamp: u64,
 }
 
 //// Triggers
@@ -123,7 +126,6 @@ pub struct RunnerPayload {
 }
 
 //// Pipeline
-#[derive(Default)]
 pub struct Hypetrigger {
     // Path the the ffmpeg binary or command to use
     pub ffmpeg_exe: String,
@@ -140,7 +142,23 @@ pub struct Hypetrigger {
     pub triggers: Vec<Box<dyn Trigger>>,
 }
 
+impl Default for Hypetrigger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Hypetrigger {
+    // --- Constructor ---
+    pub fn new() -> Self {
+        Self {
+            ffmpeg_exe: "ffmpeg".to_string(),
+            input: "".to_string(),
+            fps: 2,
+            triggers: vec![],
+        }
+    }
+
     // --- Getters and setters ---
     /// Setter for the ffmpeg binary or command to use
     pub fn set_ffmpeg_exe(&mut self, ffmpeg_exe: String) -> &mut Self {
@@ -166,15 +184,40 @@ impl Hypetrigger {
         self
     }
 
-    // --- Constructor ---
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     // --- Behavior ---
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
     pub fn run(&self) -> Result<(), String> {
-        Err("Not implemented".to_string())
+        let ffmpeg_child = self.spawn_ffmpeg_child();
+        Err("not implemented".to_string())
+    }
+
+    pub fn spawn_ffmpeg_child(&self) -> io::Result<Child> {
+        let mut cmd = Command::new(self.ffmpeg_exe.as_str());
+        cmd.arg("-hwaccel")
+            .arg("auto")
+            .arg("-i")
+            .arg(self.input.as_str())
+            .arg("-filter:v")
+            .arg(format!("fps={}", self.fps))
+            .arg("-vsync")
+            .arg("drop")
+            .arg("-f")
+            .arg("rawvideo")
+            .arg("-pix_fmt")
+            .arg("rgb24")
+            .arg("-an")
+            .arg("-y")
+            .arg("pipe:1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(0x08000000);
+
+        // Debug command
+        println!("[debug] ffmpeg command appears below:");
+        println!("{}", command_to_string(&cmd));
+
+        cmd.spawn()
     }
 }
 
@@ -239,4 +282,29 @@ pub fn _main_threaded() -> Result<(), String> {
         .set_fps(2)
         .add_trigger(Box::new(trigger))
         .run()
+}
+
+//// Utilities
+
+/// Convert a Command to a string that can be run in a shell (for debug purposes).
+///
+/// It's tailored to the `ffmpeg` command, such that it pairs up groups of
+/// arguments prefixed with dashes with their corresponding values (e.g. `-i` and `input.mp4`),
+/// and splits them onto multiple (escaped) lines for readibility.
+pub fn command_to_string(cmd: &Command) -> String {
+    let mut command_string = String::new();
+    command_string.push_str(cmd.get_program().to_str().unwrap());
+
+    for arg in cmd.get_args() {
+        let arg_str = arg.to_str().unwrap();
+        command_string.push(' ');
+        if arg_str.starts_with('-') {
+            command_string.push_str("\\\n\t");
+            command_string.push_str(arg_str);
+        } else {
+            command_string.push_str(format!("{:?}", arg_str).as_str());
+        }
+    }
+
+    command_string
 }
