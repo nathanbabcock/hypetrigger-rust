@@ -1,10 +1,13 @@
 use crate::tesseract::init_tesseract;
 use photon_rs::PhotonImage;
 use regex::Regex;
+use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::io::Write;
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::ChildStderr;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::channel;
 use std::thread;
 use std::{
     io::{self, BufRead},
@@ -135,6 +138,9 @@ pub struct Hypetrigger {
     // Path the the ffmpeg binary or command to use
     pub ffmpeg_exe: String,
 
+    // Path (including filename) to save a log file
+    pub log_file: Option<PathBuf>,
+
     /// Path to input video (or image) for ffmpeg
     pub input: String,
 
@@ -158,6 +164,7 @@ impl Hypetrigger {
     pub fn new() -> Self {
         Self {
             ffmpeg_exe: "ffmpeg".to_string(),
+            log_file: Some(PathBuf::from("hypetrigger.log")),
             input: "".to_string(),
             fps: 2,
             triggers: vec![],
@@ -168,6 +175,15 @@ impl Hypetrigger {
     /// Setter for the ffmpeg binary or command to use
     pub fn set_ffmpeg_exe(&mut self, ffmpeg_exe: String) -> &mut Self {
         self.ffmpeg_exe = ffmpeg_exe;
+        self
+    }
+
+    /// Specify where to save log file to disk, or `None` to disable logging
+    pub fn set_log_file<P>(&mut self, log_file: Option<P>) -> &mut Self
+    where
+        P: Into<PathBuf>,
+    {
+        self.log_file = log_file.map(|path_ref| path_ref.into());
         self
     }
 
@@ -191,7 +207,11 @@ impl Hypetrigger {
 
     // --- Behavior ---
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
-    pub fn run(&self) -> Result<(), String> {
+    pub fn run(&mut self) -> Result<(), String> {
+        // Init logging
+        println!("[hypetrigger] run()");
+        self.init_log();
+
         // Spawn FFMPEG command
         let mut ffmpeg_child = match self.spawn_ffmpeg_child() {
             Ok(ffmpeg_child) => ffmpeg_child,
@@ -246,6 +266,37 @@ impl Hypetrigger {
         Ok(())
     }
 
+    /// Write a message to the log file on disk. If `log_file` is `None`, this is a no-op.
+    pub fn log<S>(&self, message: &str) -> io::Result<()> {
+        match &self.log_file {
+            Some(path) => {
+                let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+                writeln!(file, "{}", message)
+            }
+            None => Ok(()),
+        }
+    }
+
+    /// Initialize the log file on disk. If `log_file` is `None`, this is a no-op.
+    pub fn init_log(&mut self) -> &mut Self {
+        let result = match &self.log_file {
+            Some(path) => match OpenOptions::new().create(true).write(true).open(path) {
+                Ok(mut file) => writeln!(file, ""),
+                Err(e) => Err(e),
+            },
+            None => {
+                println!("[logger] Log file is set to None.");
+                Ok(())
+            }
+        };
+        if let Err(e) = result {
+            eprintln!("[logger] Failed to initialize log file: {}", e);
+            eprintln!("[logger] Continuing without logging.");
+            self.set_log_file::<PathBuf>(None); // ?? turbofish is necessary here?
+        };
+        self
+    }
+
     pub fn spawn_ffmpeg_child(&self) -> io::Result<Child> {
         let mut cmd = Command::new(self.ffmpeg_exe.as_str());
         cmd.arg("-hwaccel")
@@ -298,7 +349,7 @@ impl Hypetrigger {
                 loop {
                     // Rust docs claim this isn't necessary, but the buffer
                     // never gets cleared!
-                    line = "".to_string();
+                    line.clear();
 
                     match reader.read_line(&mut line) {
                         Ok(0) => {
