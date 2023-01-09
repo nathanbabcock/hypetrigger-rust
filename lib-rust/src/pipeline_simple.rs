@@ -384,69 +384,6 @@ impl Hypetrigger {
     }
 }
 
-pub fn _main() -> Result<(), String> {
-    let tesseract = Mutex::new(match init_tesseract() {
-        Ok(tesseract) => tesseract,
-        Err(e) => return Err(e.to_string()),
-    });
-
-    let trigger = TesseractTrigger {
-        tesseract,
-        crop: Crop {
-            left_percent: 0.0,
-            top_percent: 0.0,
-            width_percent: 100.0,
-            height_percent: 100.0,
-        },
-        threshold_filter: ThresholdFilter {
-            r: 255,
-            g: 255,
-            b: 255,
-            threshold: 42,
-        },
-    };
-
-    Hypetrigger::new()
-        .set_ffmpeg_exe("ffmpeg".to_string())
-        .set_input("test.mp4".to_string())
-        .set_fps(2)
-        .add_trigger(Box::new(trigger))
-        .run()
-}
-
-pub fn _main_threaded() -> Result<(), String> {
-    let tesseract = Mutex::new(match init_tesseract() {
-        Ok(tesseract) => tesseract,
-        Err(e) => return Err(e.to_string()),
-    });
-
-    let runner_thread = RunnerThread::spawn(1);
-
-    let trigger = TesseractTrigger {
-        tesseract,
-        crop: Crop {
-            left_percent: 0.0,
-            top_percent: 0.0,
-            width_percent: 100.0,
-            height_percent: 100.0,
-        },
-        threshold_filter: ThresholdFilter {
-            r: 255,
-            g: 255,
-            b: 255,
-            threshold: 42,
-        },
-    }
-    .run_on_thread(runner_thread);
-
-    Hypetrigger::new()
-        .set_ffmpeg_exe("ffmpeg".to_string())
-        .set_input("test.mp4".to_string())
-        .set_fps(2)
-        .add_trigger(Box::new(trigger))
-        .run()
-}
-
 //// Utilities
 
 /// Convert a Command to a string that can be run in a shell (for debug
