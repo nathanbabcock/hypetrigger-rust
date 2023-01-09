@@ -1,8 +1,10 @@
 use crate::tesseract::init_tesseract;
+use image::RgbImage;
 use photon_rs::PhotonImage;
 use regex::Regex;
 use std::fs::OpenOptions;
 use std::io::BufReader;
+use std::io::Read;
 use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -49,17 +51,16 @@ impl Crop {
 
 /// Represents a single frame of the input, including the raw image pixels as
 /// well as the time it appears in the input (frame_num and/or timestamp)
+#[derive(Clone)]
 pub struct Frame {
-    pub width: u64,
-    pub height: u64,
-    pub image: Vec<u8>,
+    pub image: RgbImage,
     pub frame_num: u64,
-    pub timestamp: u64,
+    pub timestamp: f64,
 }
 
 //// Triggers
 pub trait Trigger {
-    fn on_frame(&self, frame: Frame) -> Result<(), String>;
+    fn on_frame(&self, frame: &Frame) -> Result<(), String>;
 
     /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
     fn run_on_thread(self, runner_thread: RunnerThread) -> ThreadTrigger
@@ -81,7 +82,7 @@ pub struct TesseractTrigger {
 }
 
 impl Trigger for TesseractTrigger {
-    fn on_frame(&self, frame: Frame) -> Result<(), String> {
+    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
         Err("not implemented".to_string())
     }
 }
@@ -96,9 +97,9 @@ pub struct ThreadTrigger {
 }
 
 impl Trigger for ThreadTrigger {
-    fn on_frame(&self, frame: Frame) -> Result<(), String> {
+    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
         match self.runner_thread.tx.send(RunnerPayload {
-            frame,
+            frame: frame.clone(),
             trigger: self.trigger.clone(),
         }) {
             Ok(_) => Ok(()),
@@ -120,7 +121,7 @@ impl RunnerThread {
         let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(buffer_size);
         let join_handle = std::thread::spawn(move || {
             while let Ok(payload) = rx.recv() {
-                payload.trigger.on_frame(payload.frame);
+                payload.trigger.on_frame(&payload.frame);
             }
         });
         Self { tx, join_handle }
@@ -223,7 +224,7 @@ impl Hypetrigger {
             Some(ffmpeg_stderr) => ffmpeg_stderr,
             None => return Err("no stderr".to_string()),
         };
-        let ffmpeg_stdout = match ffmpeg_child.stdout.take() {
+        let mut ffmpeg_stdout = match ffmpeg_child.stdout.take() {
             Some(ffmpeg_stdout) => ffmpeg_stdout,
             None => return Err("no stdout".to_string()),
         };
@@ -252,6 +253,31 @@ impl Hypetrigger {
             "[ffmpeg] Parsed output size from logs: {}x{}",
             output_width, output_height
         );
+
+        // Initialize a buffer
+        const CHANNELS: u32 = 3; // implicit in the `-f rgb8` flag to ffmpeg
+        let buf_size = (output_width * output_height * CHANNELS) as usize;
+        let mut buffer = vec![0_u8; buf_size];
+        println!("[ffmpeg.stdout] Allocated buffer of size {}", buf_size);
+
+        // Read from stdout on the current thread, invoking Triggers each frame
+        let mut frame_num = 0;
+        while ffmpeg_stdout.read_exact(&mut buffer).is_ok() {
+            let image = match RgbImage::from_vec(output_width, output_height, buffer.clone()) {
+                Some(image) => image,
+                None => {
+                    return Err("unable to convert vec to imagebuffer (size mismatch)".to_string())
+                }
+            };
+            let frame = Frame {
+                image,
+                frame_num,
+                timestamp: frame_num as f64 / self.fps as f64,
+            };
+            for trigger in &self.triggers {
+                trigger.on_frame(&frame);
+            }
+        }
 
         // Block until ffmpeg finishes
         let ffmpeg_exit_status = match ffmpeg_child.wait() {
