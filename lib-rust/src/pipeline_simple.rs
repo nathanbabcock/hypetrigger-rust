@@ -1,8 +1,12 @@
 use crate::tesseract::init_tesseract;
 use photon_rs::PhotonImage;
+use std::io::BufReader;
 use std::os::windows::process::CommandExt;
+use std::process::ChildStderr;
+use std::sync::mpsc::{channel, Sender};
+use std::thread;
 use std::{
-    io,
+    io::{self, BufRead},
     process::{Child, Command, Stdio},
     sync::{
         mpsc::{Receiver, SyncSender},
@@ -187,8 +191,48 @@ impl Hypetrigger {
     // --- Behavior ---
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
     pub fn run(&self) -> Result<(), String> {
-        let ffmpeg_child = self.spawn_ffmpeg_child();
-        Err("not implemented".to_string())
+        // Spawn FFMPEG command
+        let mut ffmpeg_child = match self.spawn_ffmpeg_child() {
+            Ok(ffmpeg_child) => ffmpeg_child,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        // Extract each stdio channel to use in different places
+        let ffmpeg_stderr = match ffmpeg_child.stderr.take() {
+            Some(ffmpeg_stderr) => ffmpeg_stderr,
+            None => return Err("no stderr".to_string()),
+        };
+        let ffmpeg_stdout = match ffmpeg_child.stdout.take() {
+            Some(ffmpeg_stdout) => ffmpeg_stdout,
+            None => return Err("no stdout".to_string()),
+        };
+        let ffmpeg_stdin = match ffmpeg_child.stdin.take() {
+            Some(ffmpeg_stdin) => ffmpeg_stdin,
+            None => return Err("no stdin".to_string()),
+        };
+
+        // Spawn a thread to read stderr from ffmpeg
+        let ffmpeg_stderr_thread = match self.spawn_ffmpeg_stderr_thread(ffmpeg_stderr) {
+            Ok(ffmpeg_stderr_thread) => ffmpeg_stderr_thread,
+            Err(e) => {
+                ffmpeg_child
+                    .kill()
+                    .expect("able to stop ffmpeg process if something goes wrong");
+                return Err(e.to_string());
+            }
+        };
+
+        // Block until ffmpeg finishes
+        let ffmpeg_exit_status = match ffmpeg_child.wait() {
+            Ok(ffmpeg_exit_status) => ffmpeg_exit_status,
+            Err(e) => return Err(e.to_string()),
+        };
+        println!(
+            "[ffmpeg] ffmpeg command exited with status {}",
+            ffmpeg_exit_status
+        );
+
+        Ok(())
     }
 
     pub fn spawn_ffmpeg_child(&self) -> io::Result<Child> {
@@ -211,13 +255,40 @@ impl Hypetrigger {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .creation_flags(0x08000000);
+            .creation_flags(0x08000000); // this seems Windows-only. Is there a cross-platform solution?
 
         // Debug command
         println!("[debug] ffmpeg command appears below:");
         println!("{}", command_to_string(&cmd));
 
         cmd.spawn()
+    }
+
+    /// Spawns a thread to handle reading the stderr channel from ffmpeg.
+    ///
+    /// After first spawning, we read the metadata/prelude of the ffmpeg job
+    /// in order to determine the width and height of the output frames.
+    /// That's sent back to the main thread via a channel.
+    /// After the metadata is received, the channel closes, while the stderr
+    /// handler thread continues to run in the background. It automatically
+    /// stops after ffmpeg exits.
+    pub fn spawn_ffmpeg_stderr_thread(
+        &self,
+        ffmpeg_stderr: ChildStderr,
+    ) -> io::Result<(Sender<String>, JoinHandle<()>)> {
+        let (tx, rx) = channel::<String>();
+
+        let join_handle = thread::Builder::new()
+            .name("ffmpeg_stderr".to_string())
+            .spawn(move || {
+                BufReader::new(ffmpeg_stderr).lines().for_each(|line| {
+                    println!("[ffmpeg.err] {}", line.unwrap());
+                });
+
+                println!("[ffmpeg.err] ffmpeg stderr thread exiting");
+            })?;
+
+        Ok((tx, join_handle))
     }
 }
 
