@@ -336,49 +336,54 @@ impl Hypetrigger {
     pub fn spawn_ffmpeg_stderr_thread(
         &self,
         ffmpeg_stderr: ChildStderr,
-    ) -> io::Result<(Receiver<(u32, u32)>, JoinHandle<()>)> {
+    ) -> io::Result<(Receiver<(u32, u32)>, JoinHandle<Result<(), String>>)> {
         let (output_size_tx, output_size_rx) = channel::<(u32, u32)>();
+        let thread_body = move || {
+            let mut reader = BufReader::new(ffmpeg_stderr);
+            let mut line = String::new();
+            let mut current_section = "";
+            let mut output_size: Option<(u32, u32)> = None;
+            loop {
+                // Rust docs claim this isn't necessary, but the buffer
+                // never gets cleared!
+                line.clear();
+
+                match reader.read_line(&mut line) {
+                    Ok(0) => {
+                        break; // (EOF)
+                    }
+                    Ok(_) => {
+                        // Parse for output size if not already found
+                        if output_size.is_none() {
+                            if line.starts_with("Output #") {
+                                current_section = "Output"; // stringly-typed rather than enum for convenience
+                            } else if current_section == "Output" {
+                                if let Some(size) = parse_ffmpeg_output_size(line.as_str()) {
+                                    output_size = Some(size); // remember this, so we don't check for it anymore
+                                    output_size_tx.send(size).map_err(|e| e.to_string())?;
+                                }
+                            }
+                        }
+
+                        // Regular callback on every line of stderr
+                        println!("[ffmpeg.err] {}", line.trim_end());
+                        // TODO: switch this to `self.on_ffmpeg_stderr`
+                        // callback (possible in a scoped thread)
+                    }
+                    Err(e) => {
+                        eprintln!("[ffmpeg.err] Error reading ffmpeg stderr: {}", e);
+                        eprintln!("[ffmpeg.err] Attempting to continue reading next line.");
+                    }
+                }
+            }
+
+            println!("[ffmpeg.err] ffmpeg stderr thread exiting");
+            Ok(())
+        };
 
         let join_handle = thread::Builder::new()
             .name("ffmpeg_stderr".to_string())
-            .spawn(move || {
-                let mut reader = BufReader::new(ffmpeg_stderr);
-                let mut line = String::new();
-                let mut current_section = "";
-                let mut output_size: Option<(u32, u32)> = None;
-                loop {
-                    // Rust docs claim this isn't necessary, but the buffer
-                    // never gets cleared!
-                    line.clear();
-
-                    match reader.read_line(&mut line) {
-                        Ok(0) => {
-                            break; // (EOF)
-                        }
-                        Ok(_) => {
-                            // Parse for output size if not already found
-                            if output_size.is_none() {
-                                if line.starts_with("Output #") {
-                                    current_section = "Output"; // stringly-typed rather than enum for convenience
-                                } else if current_section == "Output" {
-                                    if let Some(size) = parse_ffmpeg_output_size(line.as_str()) {
-                                        output_size = Some(size); // remember this, so we don't check for it anymore
-                                        output_size_tx.send(size).unwrap();
-                                    }
-                                }
-                            }
-
-                            // Regular callback on every line of stderr
-                            println!("[ffmpeg.err] {}", line.trim_end());
-                            // TODO: switch this to `self.on_ffmpeg_stderr`
-                            // callback (possible in a scoped thread)
-                        }
-                        Err(_) => todo!(), // TODO
-                    }
-                }
-
-                println!("[ffmpeg.err] ffmpeg stderr thread exiting");
-            })?;
+            .spawn(thread_body)?;
 
         Ok((output_size_rx, join_handle))
     }
