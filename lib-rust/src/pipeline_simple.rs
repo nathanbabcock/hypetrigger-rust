@@ -28,6 +28,7 @@ use std::{
     },
     thread::JoinHandle,
 };
+use tesseract::plumbing::TessBaseApiSetImageSafetyError;
 use tesseract::Tesseract;
 
 //// Image processing
@@ -99,10 +100,10 @@ pub trait Trigger {
 
 //// Tesseract
 pub struct TesseractTrigger {
-    tesseract: RefCell<Tesseract>,
+    tesseract: RefCell<Option<Tesseract>>,
     crop: Option<Crop>,
     threshold_filter: Option<ThresholdFilter>,
-    callback: Option<Box<(dyn Fn(&str) + Send + Sync)>>,
+    callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
 }
 
 impl Trigger for TesseractTrigger {
@@ -118,11 +119,11 @@ impl Trigger for TesseractTrigger {
         let filtered = self.preprocess_image(image);
 
         // 3. run ocr
-        let text = self.ocr(filtered, hypetrigger);
+        let text = self.ocr(filtered, hypetrigger)?;
 
         // 4. callback
         if let Some(callback) = &self.callback {
-            callback(&text);
+            callback(text.as_str());
         }
 
         Ok(())
@@ -152,8 +153,30 @@ impl TesseractTrigger {
         image
     }
 
-    pub fn ocr(&self, image: PhotonImage, hypetrigger: &Hypetrigger) -> String {
-        todo!()
+    pub fn ocr(&self, image: PhotonImage, hypetrigger: &Hypetrigger) -> Result<String, String> {
+        let rgba32 = image.get_raw_pixels();
+        let buf = rgba32.as_slice();
+        let channels = 4;
+
+        let mut tesseract = match self.tesseract.replace(None) {
+            Some(tesseract) => tesseract,
+            None => return Err("tesseract instance is missing".to_string()),
+        };
+
+        tesseract = tesseract
+            .set_frame(
+                buf,
+                image.get_width() as i32,
+                image.get_height() as i32,
+                channels,
+                image.get_width() as i32 * channels,
+            )
+            .map_err(|e| format!("set frame: {}", e))?
+            .set_source_resolution(96);
+
+        let result = tesseract.get_text().map_err(|e| format!("get text: {}", e));
+        self.tesseract.replace(Some(tesseract));
+        result
     }
 }
 
