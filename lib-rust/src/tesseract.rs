@@ -167,12 +167,9 @@ pub fn init_tesseract() -> Result<Tesseract, InitializeError> {
         .parent()
         .unwrap()
         .join("data\\tessdata");
-    let datapath: Option<&str> = tessdata_path.as_os_str().to_str();
+    let datapath = tessdata_path.as_os_str().to_str();
     println!("[tesseract] tessdata = {}", datapath.unwrap());
-
-    const LANGUAGE: Option<&str> = Some("eng");
-
-    Tesseract::new(datapath, LANGUAGE)
+    Tesseract::new(datapath, Some("eng"))
 }
 
 /// Either apply a filter or pass through the original image

@@ -84,7 +84,7 @@ pub struct Frame {
 
 //// Triggers
 pub trait Trigger {
-    fn on_frame(&self, frame: &Frame, hypetrigger: &Hypetrigger) -> Result<(), String>;
+    fn on_frame(&self, frame: &Frame) -> Result<(), String>;
 
     /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
     fn run_on_thread(self, runner_thread: RunnerThread) -> ThreadTrigger
@@ -107,7 +107,7 @@ pub struct TesseractTrigger {
 }
 
 impl Trigger for TesseractTrigger {
-    fn on_frame(&self, frame: &Frame, hypetrigger: &Hypetrigger) -> Result<(), String> {
+    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
         // 1. convert raw image to photon
         let image = PhotonImage::new(
             frame.image.to_vec(),
@@ -119,7 +119,7 @@ impl Trigger for TesseractTrigger {
         let filtered = self.preprocess_image(image);
 
         // 3. run ocr
-        let text = self.ocr(filtered, hypetrigger)?;
+        let text = self.ocr(filtered)?;
 
         // 4. callback
         if let Some(callback) = &self.callback {
@@ -153,7 +153,7 @@ impl TesseractTrigger {
         image
     }
 
-    pub fn ocr(&self, image: PhotonImage, hypetrigger: &Hypetrigger) -> Result<String, String> {
+    pub fn ocr(&self, image: PhotonImage) -> Result<String, String> {
         let rgba32 = image.get_raw_pixels();
         let buf = rgba32.as_slice();
         let channels = 4;
@@ -190,7 +190,7 @@ pub struct ThreadTrigger {
 }
 
 impl Trigger for ThreadTrigger {
-    fn on_frame(&self, frame: &Frame, hypetrigger: &Hypetrigger) -> Result<(), String> {
+    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
         match self.runner_thread.tx.send(RunnerPayload {
             frame: frame.clone(),
             trigger: self.trigger.clone(),
@@ -210,17 +210,17 @@ pub struct RunnerThread {
 }
 
 // TODO: redo with scoped threads
-// impl RunnerThread {
-//     pub fn spawn(buffer_size: usize, hypetrigger: &Hypetrigger) -> Self {
-//         let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(buffer_size);
-//         let join_handle = std::thread::spawn(move || {
-//             while let Ok(payload) = rx.recv() {
-//                 payload.trigger.on_frame(&payload.frame, hypetrigger);
-//             }
-//         });
-//         Self { tx, join_handle }
-//     }
-// }
+impl RunnerThread {
+    pub fn spawn(buffer_size: usize) -> Self {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(buffer_size);
+        let join_handle = std::thread::spawn(move || {
+            while let Ok(payload) = rx.recv() {
+                payload.trigger.on_frame(&payload.frame);
+            }
+        });
+        Self { tx, join_handle }
+    }
+}
 
 /// Everything a RunnerThread needs to run a ThreadedTrigger
 pub struct RunnerPayload {
@@ -373,7 +373,7 @@ impl Hypetrigger {
                     timestamp: frame_num as f64 / self.fps as f64,
                 };
                 for trigger in &self.triggers {
-                    trigger.on_frame(&frame, self);
+                    trigger.on_frame(&frame);
                 }
                 frame_num += 1;
             }
