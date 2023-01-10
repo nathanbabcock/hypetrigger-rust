@@ -1,6 +1,13 @@
+use crate::photon::ensure_minimum_size;
+use crate::threshold::threshold_color_distance_rgba;
 use image::RgbImage;
+use photon_rs::transform::crop;
+use photon_rs::transform::padding_uniform;
 use photon_rs::PhotonImage;
+use photon_rs::Rgb;
+use photon_rs::Rgba;
 use regex::Regex;
+use std::cell::RefCell;
 use std::fs::OpenOptions;
 use std::io::BufReader;
 use std::io::Read;
@@ -24,6 +31,10 @@ use std::{
 use tesseract::Tesseract;
 
 //// Image processing
+pub trait ImageTransform {
+    fn apply(&self, image: PhotonImage) -> PhotonImage;
+}
+
 pub struct ThresholdFilter {
     pub r: u8,
     pub g: u8,
@@ -31,9 +42,14 @@ pub struct ThresholdFilter {
     pub threshold: u8,
 }
 
-impl ThresholdFilter {
-    pub fn filter_image(&self, image: PhotonImage) {
-        todo!();
+impl ImageTransform for ThresholdFilter {
+    fn apply(&self, image: PhotonImage) -> PhotonImage {
+        let color = Rgb::new(self.r, self.g, self.b);
+        PhotonImage::new(
+            threshold_color_distance_rgba(image.get_raw_pixels(), &color, self.threshold as f64),
+            image.get_width(),
+            image.get_height(),
+        )
     }
 }
 
@@ -44,9 +60,15 @@ pub struct Crop {
     pub height_percent: f64,
 }
 
-impl Crop {
-    pub fn crop_image(&self, image: PhotonImage) {
-        todo!();
+impl ImageTransform for Crop {
+    fn apply(&self, mut image: PhotonImage) -> PhotonImage {
+        let width = image.get_width() as f64;
+        let height = image.get_height() as f64;
+        let x1 = (width * (self.left_percent / 100.0)) as u32;
+        let x2 = (x1 as f64 + (self.width_percent * width / 100.0)) as u32;
+        let y1 = (height * (self.top_percent / 100.0)) as u32;
+        let y2 = (y1 as f64 + (self.height_percent * height / 100.0)) as u32;
+        crop(&mut image, x1, y1, x2, y2)
     }
 }
 
@@ -61,7 +83,7 @@ pub struct Frame {
 
 //// Triggers
 pub trait Trigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), String>;
+    fn on_frame(&self, frame: &Frame, hypetrigger: &Hypetrigger) -> Result<(), String>;
 
     /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
     fn run_on_thread(self, runner_thread: RunnerThread) -> ThreadTrigger
@@ -77,14 +99,61 @@ pub trait Trigger {
 
 //// Tesseract
 pub struct TesseractTrigger {
-    tesseract: Mutex<Tesseract>,
-    crop: Crop,
-    threshold_filter: ThresholdFilter,
+    tesseract: RefCell<Tesseract>,
+    crop: Option<Crop>,
+    threshold_filter: Option<ThresholdFilter>,
+    callback: Option<Box<(dyn Fn(&str) + Send + Sync)>>,
 }
 
 impl Trigger for TesseractTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
-        Err("not implemented".to_string())
+    fn on_frame(&self, frame: &Frame, hypetrigger: &Hypetrigger) -> Result<(), String> {
+        // 1. convert raw image to photon
+        let image = PhotonImage::new(
+            frame.image.to_vec(),
+            frame.image.width(),
+            frame.image.height(),
+        );
+
+        // 2. preprocess
+        let filtered = self.preprocess_image(image);
+
+        // 3. run ocr
+        let text = self.ocr(filtered, hypetrigger);
+
+        // 4. callback
+        if let Some(callback) = &self.callback {
+            callback(&text);
+        }
+
+        Ok(())
+    }
+}
+
+impl TesseractTrigger {
+    pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
+        // Crop
+        if let Some(crop) = &self.crop {
+            image = crop.apply(image);
+        }
+
+        // Minimum size
+        const MIN_TESSERACT_IMAGE_SIZE: u32 = 32;
+        image = ensure_minimum_size(&image, MIN_TESSERACT_IMAGE_SIZE);
+
+        // Threshold filter
+        if let Some(filter) = &self.threshold_filter {
+            image = filter.apply(image);
+        }
+
+        // Padding
+        let padding_bg: Rgba = Rgba::new(255, 255, 255, 255);
+        image = padding_uniform(&image, MIN_TESSERACT_IMAGE_SIZE, padding_bg);
+
+        image
+    }
+
+    pub fn ocr(&self, image: PhotonImage, hypetrigger: &Hypetrigger) -> String {
+        todo!()
     }
 }
 
@@ -98,7 +167,7 @@ pub struct ThreadTrigger {
 }
 
 impl Trigger for ThreadTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
+    fn on_frame(&self, frame: &Frame, hypetrigger: &Hypetrigger) -> Result<(), String> {
         match self.runner_thread.tx.send(RunnerPayload {
             frame: frame.clone(),
             trigger: self.trigger.clone(),
@@ -117,17 +186,18 @@ pub struct RunnerThread {
     pub join_handle: JoinHandle<()>,
 }
 
-impl RunnerThread {
-    pub fn spawn(buffer_size: usize) -> Self {
-        let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(buffer_size);
-        let join_handle = std::thread::spawn(move || {
-            while let Ok(payload) = rx.recv() {
-                payload.trigger.on_frame(&payload.frame);
-            }
-        });
-        Self { tx, join_handle }
-    }
-}
+// TODO: redo with scoped threads
+// impl RunnerThread {
+//     pub fn spawn(buffer_size: usize, hypetrigger: &Hypetrigger) -> Self {
+//         let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(buffer_size);
+//         let join_handle = std::thread::spawn(move || {
+//             while let Ok(payload) = rx.recv() {
+//                 payload.trigger.on_frame(&payload.frame, hypetrigger);
+//             }
+//         });
+//         Self { tx, join_handle }
+//     }
+// }
 
 /// Everything a RunnerThread needs to run a ThreadedTrigger
 pub struct RunnerPayload {
@@ -250,8 +320,8 @@ impl Hypetrigger {
 
             // Block on each line of ffmpeg stderr until receiving the output size
             let (output_width, output_height) = output_size_rx.recv().map_err(|_| {
-            "ffmpeg exited before sending output size. This is likely due to an invalid input file.".to_string()
-          })?;
+              "ffmpeg exited before sending output size. This is likely due to an invalid input file.".to_string()
+            })?;
             println!(
                 "[ffmpeg] Parsed output size from logs: {}x{}",
                 output_width, output_height
@@ -280,7 +350,7 @@ impl Hypetrigger {
                     timestamp: frame_num as f64 / self.fps as f64,
                 };
                 for trigger in &self.triggers {
-                    trigger.on_frame(&frame);
+                    trigger.on_frame(&frame, self);
                 }
                 frame_num += 1;
             }
