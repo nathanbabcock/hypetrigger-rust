@@ -16,7 +16,7 @@ use photon_rs::{
 use std::{
     cell::RefCell,
     fs::{self, File},
-    io::{self, stdin},
+    io::{self, stdin, Write},
     path::{Path, PathBuf},
     sync::{mpsc::Receiver, Arc},
     time::Instant,
@@ -163,13 +163,13 @@ pub fn tesseract_runner(
 }
 
 /// Attempts to download the latest traineddata file from Github
-pub fn download_tesseract_trainneddata(download_path: &Path) -> Result<(), String> {
+pub fn download_tesseract_traineddata(download_path: &Path) -> Result<(), String> {
     // Download latest from Github
     let body = reqwest::blocking::get(
-        "https://github.com/tesseract-ocr/tessdata/blob/main/eng.traineddata?raw=true",
+        "https://github.com/tesseract-ocr/tessdata/raw/4.00/eng.traineddata",
     )
     .map_err(|e| e.to_string())?
-    .text()
+    .bytes()
     .map_err(|e| e.to_string())?;
 
     // Automatically create needed directories
@@ -177,37 +177,39 @@ pub fn download_tesseract_trainneddata(download_path: &Path) -> Result<(), Strin
 
     // Write to file
     let mut file = File::create(download_path).map_err(|e| e.to_string())?;
-    io::copy(&mut body.as_bytes(), &mut file)
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+    file.write_all(body.as_ref()).map_err(|e| e.to_string())
+    // io::copy(&mut body, &mut file)
+    //     .map(|_| ())
+    //     .map_err(|e| e.to_string())
 }
 
-/// Initialize a Tesseract instance, automatically downloading trainnedata if needed
+/// Initialize a Tesseract instance, automatically downloading traineddata if needed
 pub fn init_tesseract(datapath: Option<&str>, language: Option<&str>) -> io::Result<Tesseract> {
     let current_exe = std::env::current_exe()?;
-    let default_datapath = current_exe.parent().unwrap().as_os_str().to_str().unwrap();
+    let default_datapath_pathbuf = current_exe.parent().unwrap().join(""); // this fixed something???
+    let default_datapath = default_datapath_pathbuf.as_os_str().to_str().unwrap();
     let datapath = datapath.unwrap_or(default_datapath.as_ref());
     let language = language.unwrap_or("eng");
     println!("[tesseract] using datapath {}", datapath);
     println!("[tesseract] using language {}", language);
 
-    // Check for trainnedata and try downloading trainnedata if needed
-    let datapath_pathbuf = Path::new(datapath).join(format!("{}.traineddata", language));
-    let datapath_path = datapath_pathbuf.as_path();
-    if !datapath_path.exists() {
+    // Check for trainedata and try downloading if needed
+    let traineddata_pathbuf = Path::new(datapath).join(format!("{}.traineddata", language));
+    let traineddata_path = traineddata_pathbuf.as_path();
+    if !traineddata_path.exists() {
         println!(
-            "[tesseract] could not find trainnedata at {}",
-            datapath_path.display()
+            "[tesseract] could not find traineddata at {}",
+            traineddata_path.display()
         );
-        println!("[tesseract] downloading trainnedata...");
-        download_tesseract_trainneddata(datapath_path)
+        println!("[tesseract] downloading traineddata...");
+        download_tesseract_traineddata(traineddata_path)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))?;
-        println!("[tesseract] trainnedata downloaded!");
+        println!("[tesseract] traineddata downloaded!");
     } else {
-        println!("[tesseract] found trainnedata")
+        println!("[tesseract] found traineddata")
     }
 
-    Tesseract::new(None, Some(language))
+    Tesseract::new(Some(datapath), Some(language))
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))
 }
 
