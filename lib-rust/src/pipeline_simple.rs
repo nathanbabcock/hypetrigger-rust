@@ -282,6 +282,7 @@ impl Hypetrigger {
                 for trigger in &self.triggers {
                     trigger.on_frame(&frame);
                 }
+                frame_num += 1;
             }
             println!("[ffmpeg.out] Finished reading from stdout");
             Ok(())
