@@ -9,7 +9,7 @@ use tesseract::Tesseract;
 fn main() {
     println!("Hello world!");
 
-    let tesseract = RefCell::new(Some(Tesseract::new(None, None).unwrap()));
+    let tesseract = RefCell::new(Some(init_tesseract(None, None).unwrap()));
     let trigger = TesseractTrigger {
         tesseract,
         crop: None,
