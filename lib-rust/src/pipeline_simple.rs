@@ -9,6 +9,7 @@ use photon_rs::Rgba;
 use regex::Regex;
 use std::cell::RefCell;
 use std::fs::OpenOptions;
+use std::io::stdin;
 use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
@@ -100,10 +101,16 @@ pub trait Trigger {
 
 //// Tesseract
 pub struct TesseractTrigger {
-    tesseract: RefCell<Option<Tesseract>>,
-    crop: Option<Crop>,
-    threshold_filter: Option<ThresholdFilter>,
-    callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
+    pub tesseract: RefCell<Option<Tesseract>>,
+    pub crop: Option<Crop>,
+    pub threshold_filter: Option<ThresholdFilter>,
+    pub callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
+}
+
+pub fn debug_frame(frame: &Frame) {
+    println!("[debug] Execution paused. Frame #{}", frame.frame_num);
+    println!("[debug] Press any key to continue...");
+    stdin().read_line(&mut String::new()).unwrap();
 }
 
 impl Trigger for TesseractTrigger {
@@ -114,6 +121,7 @@ impl Trigger for TesseractTrigger {
             frame.image.width(),
             frame.image.height(),
         );
+        debug_frame(frame);
 
         // 2. preprocess
         let filtered = self.preprocess_image(image);

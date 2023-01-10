@@ -15,7 +15,11 @@ pub mod photon;
 pub mod pipeline;
 pub mod pipeline_simple;
 pub mod runner;
-pub mod tensorflow;
-pub mod tesseract;
 pub mod threshold;
 pub mod trigger;
+
+#[cfg(feature = "tensorflow")]
+pub mod tensorflow;
+
+#[cfg(feature = "tesseract")]
+pub mod tesseract;

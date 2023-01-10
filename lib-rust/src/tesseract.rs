@@ -16,7 +16,7 @@ use photon_rs::{
 use std::{
     cell::RefCell,
     io::{self, stdin},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{mpsc::Receiver, Arc},
     time::Instant,
 };
