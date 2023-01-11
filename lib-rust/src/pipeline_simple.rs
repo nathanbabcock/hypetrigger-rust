@@ -55,63 +55,6 @@ use tensorflow::Status;
 use tesseract::InitializeError;
 use tesseract::Tesseract;
 
-//// Tensorflow Trigger
-pub struct TensorflowTrigger {
-    pub crop: Crop,
-    pub bundle: SavedModelBundle,
-    pub graph: Graph,
-    pub callback: Option<Box<dyn Fn(&Prediction) + Send + Sync>>,
-}
-
-impl Trigger for TensorflowTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<()> {
-        // 1. convert raw image to photon
-        let image = rgb_to_photon(&frame.image);
-
-        // 2. preprocess
-        let filtered = self.preprocess_image(image);
-
-        // 3. image classification
-        let rgba32 = filtered.get_raw_pixels();
-        let rgb24 = rgba32_to_rgb24(rgba32);
-        let buf = rgb24.as_slice();
-        let tensor = buffer_to_tensor(buf);
-        let prediction = predict(&self.bundle, &self.graph, &tensor)?;
-
-        // 4. callback
-        if let Some(callback) = &self.callback {
-            callback(&prediction);
-        }
-
-        Ok(())
-    }
-}
-
-impl TensorflowTrigger {
-    pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
-        /// If `true`, pauses execution after each step of image pre-processing.
-        const DEBUG: bool = false;
-        if DEBUG {
-            println!("[tensorflow] received frame");
-            debug_photon_image(&image);
-        }
-
-        let size = TENSOR_SIZE as u32;
-        image = ensure_square(image);
-        image = ensure_size(image, size, size);
-
-        if DEBUG {
-            println!("[tensorflow] center square crop and resize to 224x224 px");
-            debug_photon_image(&image);
-        }
-
-        debug_assert!(image.get_width() == size);
-        debug_assert!(image.get_height() == size);
-
-        image
-    }
-}
-
 //// Thread Triggers
 /// A wrapper around any other Trigger that sends it across a channel to run on
 /// a separate thread.
