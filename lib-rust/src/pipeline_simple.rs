@@ -1,11 +1,11 @@
 use crate::debug::debug_photon_image;
 use crate::error::{Error, NoneError, Result};
-use crate::photon::ensure_square;
 use crate::photon::rgb24_to_rgba32;
 use crate::photon::rgba32_to_rgb24;
 use crate::photon::ImageTransform;
 use crate::photon::{ensure_minimum_size, Crop};
 use crate::photon::{ensure_size, ThresholdFilter};
+use crate::photon::{ensure_square, rgb_to_photon};
 use crate::tensorflow::buffer_to_tensor;
 use crate::tensorflow::predict;
 use crate::tensorflow::Prediction;
@@ -54,104 +54,6 @@ use tensorflow::SavedModelBundle;
 use tensorflow::Status;
 use tesseract::InitializeError;
 use tesseract::Tesseract;
-
-//// Tesseract
-pub struct TesseractTrigger {
-    pub tesseract: Arc<Mutex<Option<Tesseract>>>,
-    pub crop: Option<Crop>,
-    pub threshold_filter: Option<ThresholdFilter>,
-    pub callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
-}
-
-impl Trigger for TesseractTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<()> {
-        // 1. convert raw image to photon
-        let image = rgb_to_photon(&frame.image);
-
-        // 2. preprocess
-        let filtered = self.preprocess_image(image);
-
-        // 3. run ocr
-        let text = self.ocr(filtered)?;
-
-        // 4. callback
-        if let Some(callback) = &self.callback {
-            callback(text.as_str());
-        }
-
-        Ok(())
-    }
-}
-
-impl TesseractTrigger {
-    pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
-        /// If `true`, pauses execution after each step of image pre-processing.
-        const DEBUG: bool = false;
-        if DEBUG {
-            println!("[tesseract] received frame");
-            debug_photon_image(&image);
-        }
-
-        // Crop
-        if let Some(crop) = &self.crop {
-            image = crop.apply(image);
-        }
-        if DEBUG {
-            println!("[tesseract] cropped");
-            debug_photon_image(&image);
-        }
-
-        // Minimum size
-        const MIN_TESSERACT_IMAGE_SIZE: u32 = 32;
-        image = ensure_minimum_size(&image, MIN_TESSERACT_IMAGE_SIZE);
-        if DEBUG {
-            println!("[tesseract] resized");
-            debug_photon_image(&image);
-        }
-
-        // Threshold filter
-        if let Some(filter) = &self.threshold_filter {
-            image = filter.apply(image);
-        }
-        if DEBUG {
-            println!("[tesseract] filtered");
-            debug_photon_image(&image);
-        }
-
-        // Padding
-        let padding_bg: Rgba = Rgba::new(255, 255, 255, 255);
-        image = padding_uniform(&image, MIN_TESSERACT_IMAGE_SIZE, padding_bg);
-        if DEBUG {
-            println!("[tesseract] padded (done)");
-            debug_photon_image(&image);
-        }
-
-        image
-    }
-
-    pub fn ocr(&self, image: PhotonImage) -> std::result::Result<String, String> {
-        let rgba32 = image.get_raw_pixels();
-        let buf = rgba32.as_slice();
-        let channels = 4;
-
-        let mut mutex_guard = self.tesseract.lock().map_err(|e| e.to_string())?;
-        let mut tesseract = mutex_guard.take().ok_or("tesseract gone missing")?;
-        tesseract = tesseract
-            .set_frame(
-                buf,
-                image.get_width() as i32,
-                image.get_height() as i32,
-                channels,
-                image.get_width() as i32 * channels,
-            )
-            .map_err(|e| format!("set frame: {}", e))?
-            .set_source_resolution(96);
-
-        let result = tesseract.get_text().map_err(|e| format!("get text: {}", e));
-        mutex_guard.insert(tesseract);
-        result
-    }
-}
 
 //// Tensorflow Trigger
 pub struct TensorflowTrigger {
@@ -631,13 +533,4 @@ pub fn format_seconds(seconds: f64) -> String {
         string += &format!(".{}", milliseconds);
     }
     string
-}
-
-#[cfg(feature = "photon")]
-/// Convert an `RgbImage` (`image` crate) to a `PhotonImage` (`photon-rs` crate)
-pub fn rgb_to_photon(rgb: &RgbImage) -> PhotonImage {
-    let rgb24 = rgb.to_vec();
-    let rgb32 = rgb24_to_rgba32(rgb24);
-    let photon_image = PhotonImage::new(rgb32, rgb.width(), rgb.height());
-    photon_image
 }

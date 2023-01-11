@@ -1,3 +1,4 @@
+use image::RgbImage;
 use photon_rs::{
     transform::{crop, resize, SamplingFilter},
     PhotonImage, Rgb,
@@ -133,4 +134,12 @@ pub fn rgba32_to_rgb24(vec: Vec<u8>) -> Vec<u8> {
         new_vec.push(vec[i + 2]);
     }
     new_vec
+}
+
+/// Convert an `RgbImage` (`image` crate) to a `PhotonImage` (`photon-rs` crate)
+pub fn rgb_to_photon(rgb: &RgbImage) -> PhotonImage {
+    let rgb24 = rgb.to_vec();
+    let rgb32 = rgb24_to_rgba32(rgb24);
+    let photon_image = PhotonImage::new(rgb32, rgb.width(), rgb.height());
+    photon_image
 }

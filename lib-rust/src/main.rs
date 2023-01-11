@@ -3,9 +3,9 @@ use std::cell::RefCell;
 use hypetrigger::{
     error::{Error, Result},
     photon::Crop,
-    pipeline_simple::{Hypetrigger, RunnerThread, TesseractTrigger, ThreadTrigger},
+    pipeline_simple::{Hypetrigger, RunnerThread, ThreadTrigger},
     simple_trigger::SimpleTrigger,
-    tesseract::init_tesseract,
+    tesseract::{init_tesseract, TesseractTrigger},
 };
 use tesseract::Tesseract;
 

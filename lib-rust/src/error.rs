@@ -2,6 +2,9 @@ use std::error::Error as StdError;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::sync::mpsc::SendError;
+use std::sync::PoisonError;
+
+use tesseract::plumbing::{TessBaseApiGetUtf8TextError, TessBaseApiSetImageSafetyError};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -87,9 +90,33 @@ impl<T: Send + 'static> From<SendError<T>> for Error {
     }
 }
 
+impl<T> From<PoisonError<T>> for Error {
+    fn from(e: PoisonError<T>) -> Self {
+        // Because `PoisonError` keeps a (non-static) reference to `self`, which
+        // can't be allowed to cross function boundaries, skip the `source` field.
+        Error {
+            message: e.to_string(),
+            source: None,
+        }
+    }
+}
+
 impl From<String> for Error {
     fn from(e: String) -> Self {
         Error::from_display(e)
+    }
+}
+
+impl From<&str> for Error {
+    fn from(e: &str) -> Self {
+        Error::from_display(e)
+    }
+}
+
+#[cfg(feature = "tesseract")]
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::from_std(e)
     }
 }
 
@@ -101,8 +128,15 @@ impl From<tesseract::InitializeError> for Error {
 }
 
 #[cfg(feature = "tesseract")]
-impl From<reqwest::Error> for Error {
-    fn from(e: reqwest::Error) -> Self {
+impl From<TessBaseApiSetImageSafetyError> for Error {
+    fn from(e: TessBaseApiSetImageSafetyError) -> Self {
+        Error::from_std(e)
+    }
+}
+
+#[cfg(feature = "tesseract")]
+impl From<TessBaseApiGetUtf8TextError> for Error {
+    fn from(e: TessBaseApiGetUtf8TextError) -> Self {
         Error::from_std(e)
     }
 }
