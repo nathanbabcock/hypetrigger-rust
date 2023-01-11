@@ -30,6 +30,7 @@ use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::ChildStderr;
+use std::process::ChildStdout;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::SendError;
 use std::thread;
@@ -590,6 +591,27 @@ impl Hypetrigger {
             None => return Err("no stdin".to_string()),
         };
 
+        // Attach to ffmpeg
+        self.attach(ffmpeg_stderr, ffmpeg_stdout)?;
+
+        // Block until ffmpeg finishes
+        let ffmpeg_exit_status = match ffmpeg_child.wait() {
+            Ok(ffmpeg_exit_status) => ffmpeg_exit_status,
+            Err(e) => return Err(e.to_string()),
+        };
+        println!(
+            "[ffmpeg] ffmpeg command exited with status {}",
+            ffmpeg_exit_status
+        );
+
+        Ok(())
+    }
+
+    pub fn attach(
+        &self,
+        mut ffmpeg_stderr: ChildStderr,
+        mut ffmpeg_stdout: ChildStdout,
+    ) -> Result<(), String> {
         // Enter a new scope that will block until ffmpeg_stderr_thread is done
         thread::scope(|scope| {
             // Spawn a thread to read stderr from ffmpeg
@@ -597,17 +619,18 @@ impl Hypetrigger {
                 match self.spawn_ffmpeg_stderr_thread(&mut ffmpeg_stderr, scope) {
                     Ok(ffmpeg_stderr_thread) => ffmpeg_stderr_thread,
                     Err(e) => {
-                        ffmpeg_child
-                            .kill()
-                            .expect("able to stop ffmpeg process if something goes wrong");
+                        // TODO lost scope:
+                        // ffmpeg_child
+                        //     .kill()
+                        //     .expect("able to stop ffmpeg process if something goes wrong");
                         return Err(e.to_string());
                     }
                 };
 
             // Block on each line of ffmpeg stderr until receiving the output size
             let (output_width, output_height) = output_size_rx.recv().map_err(|_| {
-              "ffmpeg exited before sending output size. This is likely due to an invalid input file.".to_string()
-            })?;
+          "ffmpeg exited before sending output size. This is likely due to an invalid input file.".to_string()
+        })?;
             println!(
                 "[ffmpeg] Parsed output size from logs: {}x{}",
                 output_width, output_height
@@ -642,19 +665,7 @@ impl Hypetrigger {
             }
             println!("[ffmpeg.out] Finished reading from stdout");
             Ok(())
-        })?;
-
-        // Block until ffmpeg finishes
-        let ffmpeg_exit_status = match ffmpeg_child.wait() {
-            Ok(ffmpeg_exit_status) => ffmpeg_exit_status,
-            Err(e) => return Err(e.to_string()),
-        };
-        println!(
-            "[ffmpeg] ffmpeg command exited with status {}",
-            ffmpeg_exit_status
-        );
-
-        Ok(())
+        })
     }
 
     /// Write a message to the log file on disk. If `log_file` is `None`, this is a no-op.
