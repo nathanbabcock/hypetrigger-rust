@@ -8,6 +8,8 @@ use photon_rs::Rgb;
 use photon_rs::Rgba;
 use regex::Regex;
 use std::cell::RefCell;
+use std::error::Error as StdError;
+use std::fmt::Display;
 use std::fs::OpenOptions;
 use std::io::stdin;
 use std::io::BufReader;
@@ -31,6 +33,68 @@ use std::{
 };
 use tesseract::plumbing::TessBaseApiSetImageSafetyError;
 use tesseract::Tesseract;
+
+//// Error handling
+#[derive(Debug)]
+pub struct Error {
+    source: Option<Box<dyn StdError + 'static>>,
+    message: String,
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error {
+    /// Wrap any standard Error into a library Error.
+    /// Similar to [`anyhow`](https://github.com/dtolnay/anyhow/blob/master/src/error.rs#L88).
+    pub fn from_std<E>(e: E) -> Self
+    where
+        E: std::error::Error + 'static,
+    {
+        Error {
+            message: e.to_string(),
+            source: Some(Box::new(e)),
+        }
+    }
+}
+
+// pub type Result<T> = std::result::Result<T, Error>;
+
+/// Represents an attempt to unwrap a None value from an Option.
+///
+/// ```rs
+/// let value = Some(x).ok_or(NoneError)?;
+/// ```
+#[derive(Debug)]
+pub struct NoneError;
+impl Display for NoneError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "called unwrap() on None")
+    }
+}
+impl std::error::Error for NoneError {}
+
+#[cfg(feature = "tesseract")]
+impl From<reqwest::Error> for Error {
+    fn from(e: reqwest::Error) -> Self {
+        Error::from_std(e)
+    }
+}
+
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::from_std(e)
+    }
+}
+
+impl From<NoneError> for Error {
+    fn from(e: NoneError) -> Self {
+        Error::from_std(e)
+    }
+}
 
 //// Image processing
 pub trait ImageTransform {

@@ -4,6 +4,7 @@ use crate::{
     emit::OnEmitV2,
     photon::{ensure_minimum_size, rgb24_to_rgba32},
     pipeline::OnPanic,
+    pipeline_simple::{Error, NoneError},
     runner::{RunnerCommand, RunnerResultV2},
     threshold::threshold_color_distance,
     trigger::{Crop, Trigger},
@@ -163,24 +164,25 @@ pub fn tesseract_runner(
 }
 
 /// Attempts to download the latest traineddata file from Github
-pub fn download_tesseract_traineddata(download_path: &Path) -> Result<(), String> {
+pub fn download_tesseract_traineddata(download_path: &Path) -> Result<(), Error> {
     // Download latest from Github
-    let filename = download_path.file_name().unwrap().to_str().unwrap();
+    let filename = download_path
+        .file_name()
+        .ok_or(NoneError)?
+        .to_str()
+        .ok_or(NoneError)?;
     let url = format!(
         "https://github.com/tesseract-ocr/tessdata/raw/4.00/{}",
         filename
     );
-    let body = reqwest::blocking::get(url)
-        .map_err(|e| e.to_string())?
-        .bytes()
-        .map_err(|e| e.to_string())?;
+    let body = reqwest::blocking::get(url)?.bytes()?;
 
     // Automatically create needed directories
-    fs::create_dir_all(download_path.parent().unwrap()).map_err(|e| e.to_string())?;
+    fs::create_dir_all(download_path.parent().unwrap())?;
 
     // Write to file
-    let mut file = File::create(download_path).map_err(|e| e.to_string())?;
-    file.write_all(body.as_ref()).map_err(|e| e.to_string())
+    let mut file = File::create(download_path)?;
+    Ok(file.write_all(body.as_ref())?)
 }
 
 /// Initialize a Tesseract instance, automatically downloading traineddata if needed
