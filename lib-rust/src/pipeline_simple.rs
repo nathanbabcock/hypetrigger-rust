@@ -30,6 +30,7 @@ use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::ChildStderr;
+use std::process::ChildStdin;
 use std::process::ChildStdout;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::SendError;
@@ -605,6 +606,28 @@ impl Hypetrigger {
         );
 
         Ok(())
+    }
+
+    pub fn run_async(self) -> Result<(JoinHandle<()>, ChildStdin), Error> {
+        println!("[hypetrigger] run_async()");
+
+        // Spawn FFMPEG command
+        let mut ffmpeg_child = self.spawn_ffmpeg_child()?;
+
+        // Separate each stdio channel to use in different places
+        let ffmpeg_stderr = ffmpeg_child.stderr.take().ok_or(NoneError)?;
+        let ffmpeg_stdout = ffmpeg_child.stdout.take().ok_or(NoneError)?;
+        let ffmpeg_stdin = ffmpeg_child.stdin.take().ok_or(NoneError)?;
+
+        // Attach to ffmpeg
+        let join_handle = thread::spawn(move || {
+            // this blocks (on the inner thread) until the pipeline is done:
+            // self_arc
+            //     .attach(ffmpeg_stderr, ffmpeg_stdout)
+            //     .expect("pipeline should complete");
+        });
+
+        Ok((join_handle, ffmpeg_stdin))
     }
 
     pub fn attach(
