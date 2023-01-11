@@ -165,12 +165,15 @@ pub fn tesseract_runner(
 /// Attempts to download the latest traineddata file from Github
 pub fn download_tesseract_traineddata(download_path: &Path) -> Result<(), String> {
     // Download latest from Github
-    let body = reqwest::blocking::get(
-        "https://github.com/tesseract-ocr/tessdata/raw/4.00/eng.traineddata",
-    )
-    .map_err(|e| e.to_string())?
-    .bytes()
-    .map_err(|e| e.to_string())?;
+    let filename = download_path.file_name().unwrap().to_str().unwrap();
+    let url = format!(
+        "https://github.com/tesseract-ocr/tessdata/raw/4.00/{}",
+        filename
+    );
+    let body = reqwest::blocking::get(url)
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .map_err(|e| e.to_string())?;
 
     // Automatically create needed directories
     fs::create_dir_all(download_path.parent().unwrap()).map_err(|e| e.to_string())?;
@@ -178,9 +181,6 @@ pub fn download_tesseract_traineddata(download_path: &Path) -> Result<(), String
     // Write to file
     let mut file = File::create(download_path).map_err(|e| e.to_string())?;
     file.write_all(body.as_ref()).map_err(|e| e.to_string())
-    // io::copy(&mut body, &mut file)
-    //     .map(|_| ())
-    //     .map_err(|e| e.to_string())
 }
 
 /// Initialize a Tesseract instance, automatically downloading traineddata if needed
