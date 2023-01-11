@@ -5,6 +5,7 @@ use std::sync::Arc;
 /// A minimal Trigger implementation that just calls a callback on each frame.
 /// Functionally equivalent to a custom struct that implements `Trigger`, just
 /// with a callback instead of the `on_frame` trait method.
+#[derive(Clone)]
 pub struct SimpleTrigger {
     pub callback: Arc<dyn Fn(&Frame) + Send + Sync>,
 }
