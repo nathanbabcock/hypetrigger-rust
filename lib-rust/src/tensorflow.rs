@@ -10,7 +10,7 @@ use photon_rs::PhotonImage;
 use std::{
     collections::HashMap,
     env::current_exe,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{mpsc::Receiver, Arc},
     time::Instant,
 };
@@ -95,7 +95,7 @@ pub fn tensorflow_runner(
                 };
                 let buf = rgb24.as_slice();
                 let tensor = buffer_to_tensor(buf);
-                let prediction = predict(bundle, graph, &tensor);
+                let prediction = predict(bundle, graph, &tensor).unwrap().class_index;
                 // todo!("retrieve label name");
                 // todo!("retrieve confidence values");
                 let text: String = prediction.to_string();
@@ -145,20 +145,24 @@ pub fn init_tensorflow(triggers: &Triggers) -> ModelMap {
 
         saved_models.insert(
             trigger.model_dir.clone(),
-            load_tensorflow_model(save_model_path_str),
+            load_tensorflow_model(save_model_path_str).unwrap(),
         );
     }
 
     saved_models
 }
 
-pub fn load_tensorflow_model(save_dir: &str) -> (SavedModelBundle, Graph) {
+pub fn load_tensorflow_model<P>(
+    model_dir: P,
+) -> Result<(SavedModelBundle, Graph), crate::pipeline_simple::Error>
+where
+    P: AsRef<Path>,
+{
     println!("[tensorflow] Loading saved model");
     let now = Instant::now();
 
     let mut graph = Graph::new();
-    let bundle = SavedModelBundle::load(&SessionOptions::new(), ["serve"], &mut graph, save_dir)
-        .expect("load model bundle");
+    let bundle = SavedModelBundle::load(&SessionOptions::new(), ["serve"], &mut graph, model_dir)?;
 
     println!(
         "[tensorflow] load_tensorflow_model {}ms.",
@@ -170,7 +174,7 @@ pub fn load_tensorflow_model(save_dir: &str) -> (SavedModelBundle, Graph) {
     predict(&bundle, &graph, &dummy);
     println!("[tensorflow] finished test run");
 
-    (bundle, graph)
+    Ok((bundle, graph))
 }
 
 /// Creates a tensor of zeros (all black image) used to initialize a session for fast prediction.
@@ -183,22 +187,29 @@ pub fn dummy_tensor() -> Tensor<f32> {
         .expect("creating dummy tensor")
 }
 
-pub fn predict(bundle: &SavedModelBundle, graph: &Graph, tensor: &Tensor<f32>) -> usize {
+pub struct Prediction {
+    /// The index of the class with the highest confidence.
+    pub class_index: usize,
+
+    // pub label: String, // TODO
+    /// Confidence interval in the prediction, in the range [0, 1].
+    pub confidence: f32,
+}
+
+pub fn predict(
+    bundle: &SavedModelBundle,
+    graph: &Graph,
+    tensor: &Tensor<f32>,
+) -> Result<Prediction, crate::pipeline_simple::Error> {
     let mut args = SessionRunArgs::new();
 
     // get in/out operations
-    let signature = bundle
-        .meta_graph_def()
-        .get_signature(tensorflow::DEFAULT_SERVING_SIGNATURE_DEF_KEY)
-        .expect("Get signature");
-    let x_info = signature.get_input("Image").expect("Get image input");
-    let op_x = &graph
-        .operation_by_name_required(&x_info.name().name)
-        .expect("Get input name");
-    let output_info = signature.get_output("Confidences").expect("Get output");
-    let op_output = &graph
-        .operation_by_name_required(&output_info.name().name)
-        .expect("Get output name");
+    let meta_graph_def = bundle.meta_graph_def();
+    let signature = meta_graph_def.get_signature(tensorflow::DEFAULT_SERVING_SIGNATURE_DEF_KEY)?;
+    let x_info = signature.get_input("Image")?;
+    let op_x = &graph.operation_by_name_required(&x_info.name().name)?;
+    let output_info = signature.get_output("Confidences")?;
+    let op_output = &graph.operation_by_name_required(&output_info.name().name)?;
 
     // Load our input image
     args.add_feed(op_x, 0, tensor);
@@ -206,13 +217,13 @@ pub fn predict(bundle: &SavedModelBundle, graph: &Graph, tensor: &Tensor<f32>) -
 
     // Run prediction
     let session = &bundle.session;
-    session.run(&mut args).expect("run prediction");
+    session.run(&mut args)?;
 
     // Check the output.
-    let output: Tensor<f32> = args.fetch(token_output).expect("fetch output");
+    let output: Tensor<f32> = args.fetch(token_output)?;
 
     // Calculate argmax of the output)
-    let (max_idx, _max_val) =
+    let (max_idx, max_val) =
         output
             .iter()
             .enumerate()
@@ -224,7 +235,10 @@ pub fn predict(bundle: &SavedModelBundle, graph: &Graph, tensor: &Tensor<f32>) -
                 }
             });
 
-    max_idx
+    Ok(Prediction {
+        class_index: max_idx,
+        confidence: max_val,
+    })
 }
 
 pub fn buffer_to_tensor(buf: &[u8]) -> Tensor<f32> {

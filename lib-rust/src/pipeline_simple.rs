@@ -1,5 +1,12 @@
 use crate::photon::ensure_minimum_size;
+use crate::photon::ensure_size;
+use crate::photon::ensure_square;
 use crate::photon::rgb24_to_rgba32;
+use crate::photon::rgba32_to_rgb24;
+use crate::tensorflow::buffer_to_tensor;
+use crate::tensorflow::predict;
+use crate::tensorflow::Prediction;
+use crate::tensorflow::TENSOR_SIZE;
 use crate::threshold::threshold_color_distance_rgba;
 use image::DynamicImage;
 use image::ImageError;
@@ -37,6 +44,9 @@ use std::{
     },
     thread::JoinHandle,
 };
+use tensorflow::Graph;
+use tensorflow::SavedModelBundle;
+use tensorflow::Status;
 use tesseract::plumbing::TessBaseApiSetImageSafetyError;
 use tesseract::InitializeError;
 use tesseract::Tesseract;
@@ -144,6 +154,12 @@ impl From<InitializeError> for Error {
     }
 }
 
+impl From<Status> for Error {
+    fn from(e: Status) -> Self {
+        Error::from_std(e)
+    }
+}
+
 //// Image processing
 pub trait ImageTransform {
     fn apply(&self, image: PhotonImage) -> PhotonImage;
@@ -195,6 +211,43 @@ pub struct Frame {
     pub timestamp: f64,
 }
 
+//// Debug
+/// Write image to disk and pause execution.
+pub fn debug_image(image: &DynamicImage) -> Result<(), Error> {
+    let preview_path = current_exe()?
+        .parent()
+        .ok_or(NoneError)?
+        .join("debug-image.bmp");
+    image.save(&preview_path)?;
+
+    println!("[debug] Preview image saved to {}", &preview_path.display());
+    println!("[debug] Press any key to continue...");
+    stdin().read_line(&mut String::new())?;
+    Ok(())
+}
+
+/// Write current frame to disk and pause execution.
+pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
+    println!(
+        "[debug] Execution paused on frame {} ({})",
+        frame.frame_num,
+        format_seconds(frame.timestamp)
+    );
+    debug_rgb(&frame.image)
+}
+
+/// Write image to disk and pause execution.
+pub fn debug_rgb(image: &RgbImage) -> Result<(), Error> {
+    debug_image(&DynamicImage::ImageRgb8(image.clone()))
+}
+
+#[cfg(feature = "photon")]
+/// Write image to disk and pause execution.
+pub fn debug_photon_image(image: &PhotonImage) -> Result<(), Error> {
+    let dynamic_image = dyn_image_from_raw(image);
+    debug_image(&dynamic_image)
+}
+
 //// Triggers
 pub trait Trigger {
     fn on_frame(&self, frame: &Frame) -> Result<(), Error>;
@@ -232,43 +285,6 @@ impl SimpleTrigger {
     pub fn new(on_frame: Box<SimpleTriggerCallback>) -> Box<Self> {
         Box::new(Self { callback: on_frame })
     }
-}
-
-//// Debug
-/// Write image to disk and pause execution.
-pub fn debug_image(image: &DynamicImage) -> Result<(), Error> {
-    let preview_path = current_exe()?
-        .parent()
-        .ok_or(NoneError)?
-        .join("debug-image.bmp");
-    image.save(&preview_path)?;
-
-    println!("[debug] Preview image saved to {}", &preview_path.display());
-    println!("[debug] Press any key to continue...");
-    stdin().read_line(&mut String::new())?;
-    Ok(())
-}
-
-/// Write current frame to disk and pause execution.
-pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
-    println!(
-        "[debug] Execution paused on frame {} ({})",
-        frame.frame_num,
-        format_seconds(frame.timestamp)
-    );
-    debug_rgb(&frame.image)
-}
-
-/// Write image to disk and pause execution.
-pub fn debug_rgb(image: &RgbImage) -> Result<(), Error> {
-    debug_image(&DynamicImage::ImageRgb8(image.clone()))
-}
-
-#[cfg(feature = "photon")]
-/// Write image to disk and pause execution.
-pub fn debug_photon_image(image: &PhotonImage) -> Result<(), Error> {
-    let dynamic_image = dyn_image_from_raw(image);
-    debug_image(&dynamic_image)
 }
 
 //// Tesseract
@@ -369,6 +385,63 @@ impl TesseractTrigger {
         let result = tesseract.get_text().map_err(|e| format!("get text: {}", e));
         self.tesseract.replace(Some(tesseract));
         result
+    }
+}
+
+//// Tensorflow Trigger
+pub struct TensorflowTrigger {
+    pub crop: Crop,
+    pub bundle: SavedModelBundle,
+    pub graph: Graph,
+    pub callback: Option<Box<dyn Fn(&Prediction) + Send + Sync>>,
+}
+
+impl Trigger for TensorflowTrigger {
+    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
+        // 1. convert raw image to photon
+        let image = rgb_to_photon(&frame.image);
+
+        // 2. preprocess
+        let filtered = self.preprocess_image(image);
+
+        // 3. image classification
+        let rgba32 = filtered.get_raw_pixels();
+        let rgb24 = rgba32_to_rgb24(rgba32);
+        let buf = rgb24.as_slice();
+        let tensor = buffer_to_tensor(buf);
+        let prediction = predict(&self.bundle, &self.graph, &tensor)?;
+
+        // 4. callback
+        if let Some(callback) = &self.callback {
+            callback(&prediction);
+        }
+
+        Ok(())
+    }
+}
+
+impl TensorflowTrigger {
+    pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
+        /// If `true`, pauses execution after each step of image pre-processing.
+        const DEBUG: bool = false;
+        if DEBUG {
+            println!("[tensorflow] received frame");
+            debug_photon_image(&image);
+        }
+
+        let size = TENSOR_SIZE as u32;
+        image = ensure_square(image);
+        image = ensure_size(image, size, size);
+
+        if DEBUG {
+            println!("[tensorflow] center square crop and resize to 224x224 px");
+            debug_photon_image(&image);
+        }
+
+        debug_assert!(image.get_width() == size);
+        debug_assert!(image.get_height() == size);
+
+        image
     }
 }
 
