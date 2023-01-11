@@ -65,7 +65,7 @@ fn main_threaded() -> Result<()> {
         threshold_filter: None,
         callback: None,
     };
-    let trigger = AsyncTrigger::from(base_trigger, runner_thread.clone());
+    let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread.clone());
 
     Hypetrigger::new()
         .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())

@@ -26,7 +26,7 @@ impl Trigger for AsyncTrigger {
 }
 
 impl AsyncTrigger {
-    pub fn from<T>(trigger: T, runner_thread: Arc<TriggerThread>) -> Self
+    pub fn from_trigger<T>(trigger: T, runner_thread: Arc<TriggerThread>) -> Self
     where
         T: Trigger + 'static,
     {
