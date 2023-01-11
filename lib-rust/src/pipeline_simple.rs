@@ -1,4 +1,5 @@
 use crate::photon::ensure_minimum_size;
+use crate::photon::rgb24_to_rgba32;
 use crate::threshold::threshold_color_distance_rgba;
 use image::DynamicImage;
 use image::ImageError;
@@ -215,7 +216,7 @@ pub fn debug_image(image: &DynamicImage) -> Result<(), Error> {
 /// Write current frame to disk and pause execution.
 pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
     println!(
-        "[debug] Execution paused on frame #{} ({})",
+        "[debug] Execution paused on frame {} ({})",
         frame.frame_num,
         format_seconds(frame.timestamp)
     );
@@ -244,13 +245,10 @@ pub struct TesseractTrigger {
 
 impl Trigger for TesseractTrigger {
     fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
-        // 1. convert raw image to photon
-        let image = PhotonImage::new(
-            frame.image.to_vec(),
-            frame.image.width(),
-            frame.image.height(),
-        );
         debug_frame(frame)?;
+
+        // 1. convert raw image to photon
+        let image = rgb_to_photon(&frame.image);
 
         // 2. preprocess
         let filtered = self.preprocess_image(image);
@@ -269,23 +267,42 @@ impl Trigger for TesseractTrigger {
 
 impl TesseractTrigger {
     pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
+        /// If `true`, pauses execution after each step of image pre-processing.
+        const DEBUG: bool = false;
+
         // Crop
         if let Some(crop) = &self.crop {
             image = crop.apply(image);
+        }
+        if DEBUG {
+            println!("[tesseract] cropped");
+            debug_photon_image(&image);
         }
 
         // Minimum size
         const MIN_TESSERACT_IMAGE_SIZE: u32 = 32;
         image = ensure_minimum_size(&image, MIN_TESSERACT_IMAGE_SIZE);
+        if DEBUG {
+            println!("[tesseract] resized");
+            debug_photon_image(&image);
+        }
 
         // Threshold filter
         if let Some(filter) = &self.threshold_filter {
             image = filter.apply(image);
         }
+        if DEBUG {
+            println!("[tesseract] filtered");
+            debug_photon_image(&image);
+        }
 
         // Padding
         let padding_bg: Rgba = Rgba::new(255, 255, 255, 255);
         image = padding_uniform(&image, MIN_TESSERACT_IMAGE_SIZE, padding_bg);
+        if DEBUG {
+            println!("[tesseract] padded");
+            debug_photon_image(&image);
+        }
 
         image
     }
@@ -735,4 +752,13 @@ pub fn format_seconds(seconds: f64) -> String {
         string += &format!(".{}", milliseconds);
     }
     string
+}
+
+#[cfg(feature = "photon")]
+/// Convert an Rgb DynamicImage (`image` crate) to a `PhotonImage` (`photon-rs` crate)
+pub fn rgb_to_photon(rgb: &RgbImage) -> PhotonImage {
+    let rgb24 = rgb.to_vec();
+    let rgb32 = rgb24_to_rgba32(rgb24);
+    let photon_image = PhotonImage::new(rgb32, rgb.width(), rgb.height());
+    photon_image
 }
