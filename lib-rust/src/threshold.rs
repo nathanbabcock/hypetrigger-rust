@@ -3,7 +3,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 pub type Lab = (f64, f64, f64);
 
-/** https://en.wikipedia.org/wiki/CIELAB_color_space */
+/// https://en.wikipedia.org/wiki/CIELAB_color_space
 pub fn rgb2lab(rgb: &Rgb) -> Lab {
     let mut r = rgb.get_red() as f64 / 255_f64;
     let mut g = rgb.get_green() as f64 / 255_f64;
@@ -45,7 +45,7 @@ pub fn rgb2lab(rgb: &Rgb) -> Lab {
 }
 
 #[wasm_bindgen]
-/** https://en.wikipedia.org/wiki/Color_difference */
+/// <https://en.wikipedia.org/wiki/Color_difference>
 pub fn delta_e(color_a: &Rgb, color_b: &Rgb) -> f64 {
     let lab_a = rgb2lab(color_a);
     let lab_b = rgb2lab(color_b);
@@ -63,11 +63,15 @@ pub fn delta_e(color_a: &Rgb, color_b: &Rgb) -> f64 {
     let delta_ckcsc = delta_c / sc;
     let delta_hkhsh = delta_h / sh;
     let i = delta_lklsl * delta_lklsl + delta_ckcsc * delta_ckcsc + delta_hkhsh * delta_hkhsh;
-    if i < 0.0 { 0.0 } else { i.sqrt() }
+    if i < 0.0 {
+        0.0
+    } else {
+        i.sqrt()
+    }
 }
 
+/// Custom thresholding function which uses the color distance from a given color
 #[wasm_bindgen]
-/** Custom thresholding function which uses the color distance from a given color */
 pub fn threshold_color_distance(image: PhotonImage, color: &Rgb, threshold: f64) -> PhotonImage {
     PhotonImage::new(
         threshold_color_distance_rgba(image.get_raw_pixels(), color, threshold),
@@ -76,8 +80,8 @@ pub fn threshold_color_distance(image: PhotonImage, color: &Rgb, threshold: f64)
     )
 }
 
+/// Custom thresholding function which uses the color distance from a given color
 #[wasm_bindgen]
-/** Custom thresholding function which uses the color distance from a given color */
 pub fn threshold_color_distance_rgba(vector: Vec<u8>, color: &Rgb, threshold: f64) -> Vec<u8> {
     let mut new_vector = Vec::new();
 

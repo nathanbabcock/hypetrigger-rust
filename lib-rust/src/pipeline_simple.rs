@@ -1,9 +1,10 @@
 use crate::error::{Error, NoneError, Result};
-use crate::photon::ensure_minimum_size;
-use crate::photon::ensure_size;
 use crate::photon::ensure_square;
 use crate::photon::rgb24_to_rgba32;
 use crate::photon::rgba32_to_rgb24;
+use crate::photon::ImageTransform;
+use crate::photon::{ensure_minimum_size, Crop};
+use crate::photon::{ensure_size, ThresholdFilter};
 use crate::tensorflow::buffer_to_tensor;
 use crate::tensorflow::predict;
 use crate::tensorflow::Prediction;
@@ -51,48 +52,6 @@ use tensorflow::SavedModelBundle;
 use tensorflow::Status;
 use tesseract::InitializeError;
 use tesseract::Tesseract;
-
-//// Image processing
-pub trait ImageTransform {
-    fn apply(&self, image: PhotonImage) -> PhotonImage;
-}
-
-pub struct ThresholdFilter {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub threshold: u8,
-}
-
-impl ImageTransform for ThresholdFilter {
-    fn apply(&self, image: PhotonImage) -> PhotonImage {
-        let color = Rgb::new(self.r, self.g, self.b);
-        PhotonImage::new(
-            threshold_color_distance_rgba(image.get_raw_pixels(), &color, self.threshold as f64),
-            image.get_width(),
-            image.get_height(),
-        )
-    }
-}
-
-pub struct Crop {
-    pub left_percent: f64,
-    pub top_percent: f64,
-    pub width_percent: f64,
-    pub height_percent: f64,
-}
-
-impl ImageTransform for Crop {
-    fn apply(&self, mut image: PhotonImage) -> PhotonImage {
-        let width = image.get_width() as f64;
-        let height = image.get_height() as f64;
-        let x1 = (width * (self.left_percent / 100.0)) as u32;
-        let x2 = (x1 as f64 + (self.width_percent * width / 100.0)) as u32;
-        let y1 = (height * (self.top_percent / 100.0)) as u32;
-        let y2 = (y1 as f64 + (self.height_percent * height / 100.0)) as u32;
-        crop(&mut image, x1, y1, x2, y2)
-    }
-}
 
 /// Represents a single frame of the input, including the raw image pixels as
 /// well as the time it appears in the input (frame_num and/or timestamp)

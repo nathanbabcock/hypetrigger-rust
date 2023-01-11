@@ -1,10 +1,55 @@
-use std::cmp::min;
-
 use photon_rs::{
     transform::{crop, resize, SamplingFilter},
-    PhotonImage,
+    PhotonImage, Rgb,
 };
+use std::cmp::min;
 use wasm_bindgen::prelude::wasm_bindgen;
+
+use crate::threshold::threshold_color_distance_rgba;
+
+pub trait ImageTransform {
+    fn apply(&self, image: PhotonImage) -> PhotonImage;
+}
+
+/// A threshold function based on perceptual color distance
+#[wasm_bindgen]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+pub struct ThresholdFilter {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub threshold: u8,
+}
+
+impl ImageTransform for ThresholdFilter {
+    fn apply(&self, image: PhotonImage) -> PhotonImage {
+        let color = Rgb::new(self.r, self.g, self.b);
+        let raw_pixels =
+            threshold_color_distance_rgba(image.get_raw_pixels(), &color, self.threshold as f64);
+        PhotonImage::new(raw_pixels, image.get_width(), image.get_height())
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Crop {
+    pub left_percent: f64,
+    pub top_percent: f64,
+    pub width_percent: f64,
+    pub height_percent: f64,
+}
+
+impl ImageTransform for Crop {
+    fn apply(&self, mut image: PhotonImage) -> PhotonImage {
+        let width = image.get_width() as f64;
+        let height = image.get_height() as f64;
+        let x1 = (width * (self.left_percent / 100.0)) as u32;
+        let x2 = (x1 as f64 + (self.width_percent * width / 100.0)) as u32;
+        let y1 = (height * (self.top_percent / 100.0)) as u32;
+        let y2 = (y1 as f64 + (self.height_percent * height / 100.0)) as u32;
+        crop(&mut image, x1, y1, x2, y2)
+    }
+}
 
 /// Resize if needed and reserve aspect ratio
 #[wasm_bindgen]
