@@ -1,4 +1,9 @@
-use crate::error::Result;
+use std::sync::Arc;
+
+use crate::{
+    async_trigger::{AsyncTrigger, TriggerThread},
+    error::Result,
+};
 use image::RgbImage;
 
 /// Represents a single frame of the input, including the raw image pixels as
@@ -14,14 +19,11 @@ pub struct Frame {
 pub trait Trigger: Send + Sync {
     fn on_frame(&self, frame: &Frame) -> Result<()>;
 
-    // /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
-    // fn into_thread(self, runner_thread: Arc<RunnerThread>) -> ThreadTrigger
-    // where
-    //     Self: Sized + Send + Sync + 'static,
-    // {
-    //     ThreadTrigger {
-    //         trigger: Arc::new(self),
-    //         runner_thread,
-    //     }
-    // }
+    /// Convert this Trigger into a `AsyncTrigger`, running on a separate thread.
+    fn into_async(self, runner_thread: Arc<TriggerThread>) -> AsyncTrigger
+    where
+        Self: Sized + 'static,
+    {
+        AsyncTrigger::from_trigger(self, runner_thread)
+    }
 }
