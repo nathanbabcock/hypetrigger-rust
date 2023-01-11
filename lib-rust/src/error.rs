@@ -94,10 +94,7 @@ impl<T> From<PoisonError<T>> for Error {
     fn from(e: PoisonError<T>) -> Self {
         // Because `PoisonError` keeps a (non-static) reference to `self`, which
         // can't be allowed to cross function boundaries, skip the `source` field.
-        Error {
-            message: e.to_string(),
-            source: None,
-        }
+        Error::from_display(e.to_string())
     }
 }
 

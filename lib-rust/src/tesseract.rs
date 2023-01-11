@@ -14,12 +14,12 @@ use std::{
 };
 use tesseract::Tesseract;
 
-// #[derive(Clone)]
+#[derive(Clone)]
 pub struct TesseractTrigger {
     pub tesseract: Arc<Mutex<Option<Tesseract>>>,
     pub crop: Option<Crop>,
     pub threshold_filter: Option<ThresholdFilter>,
-    pub callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
+    pub callback: Option<Arc<dyn Fn(&str) + Send + Sync>>,
 }
 
 impl Trigger for TesseractTrigger {
