@@ -38,6 +38,7 @@ use std::{
     thread::JoinHandle,
 };
 use tesseract::plumbing::TessBaseApiSetImageSafetyError;
+use tesseract::InitializeError;
 use tesseract::Tesseract;
 
 //// Error handling
@@ -50,6 +51,12 @@ pub struct Error {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)
+    }
+}
+
+impl StdError for Error {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.source.as_ref().map(|e| &**e)
     }
 }
 
@@ -128,6 +135,12 @@ impl<T: Send + 'static> From<SendError<T>> for Error {
 impl From<String> for Error {
     fn from(e: String) -> Self {
         Error::from_display(e)
+    }
+}
+
+impl From<InitializeError> for Error {
+    fn from(e: InitializeError) -> Self {
+        Error::from_std(e)
     }
 }
 

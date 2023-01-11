@@ -60,7 +60,7 @@ pub fn tesseract_runner(
     _config: Arc<HypetriggerConfig>,
     on_panic: OnPanic,
 ) {
-    let tesseract = RefCell::new(Some(init_tesseract(None, None).unwrap()));
+    let tesseract = init_tesseract(None, None).unwrap();
     println!("[tesseract] thread initialized");
 
     let mut i = 0;
@@ -186,7 +186,10 @@ pub fn download_tesseract_traineddata(download_path: &Path) -> Result<(), Error>
 }
 
 /// Initialize a Tesseract instance, automatically downloading traineddata if needed
-pub fn init_tesseract(datapath: Option<&str>, language: Option<&str>) -> io::Result<Tesseract> {
+pub fn init_tesseract(
+    datapath: Option<&str>,
+    language: Option<&str>,
+) -> Result<RefCell<Option<Tesseract>>, Error> {
     let current_exe = std::env::current_exe()?;
     let default_datapath_pathbuf = current_exe.parent().unwrap().join(""); // this fixed something???
     let default_datapath = default_datapath_pathbuf.as_os_str().to_str().unwrap();
@@ -211,8 +214,8 @@ pub fn init_tesseract(datapath: Option<&str>, language: Option<&str>) -> io::Res
         println!("[tesseract] found traineddata")
     }
 
-    Tesseract::new(Some(datapath), Some(language))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e)))
+    let tesseract = Tesseract::new(Some(datapath), Some(language))?;
+    Ok(RefCell::new(Some(tesseract)))
 }
 
 /// Either apply a filter or pass through the original image

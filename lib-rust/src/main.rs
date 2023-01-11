@@ -22,10 +22,10 @@ fn main() -> Result<(), Error> {
         .map_err(Error::from_display)
 }
 
-fn main_tesseract() {
+fn main_tesseract() -> Result<(), Error> {
     println!("Hello world!");
 
-    let tesseract = RefCell::new(Some(init_tesseract(None, None).unwrap()));
+    let tesseract = init_tesseract(None, None)?;
     let trigger = TesseractTrigger {
         tesseract,
         crop: Some(Crop {
@@ -38,12 +38,9 @@ fn main_tesseract() {
         callback: None,
     };
 
-    match Hypetrigger::new()
+    Hypetrigger::new()
         .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
         .add_trigger(Box::new(trigger))
         .run()
-    {
-        Ok(_) => println!("[main] done"),
-        Err(e) => eprintln!("[main] error: {:?}", e),
-    }
+        .map_err(Error::from_display)
 }
