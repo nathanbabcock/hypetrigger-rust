@@ -1,3 +1,4 @@
+use crate::debug::debug_photon_image;
 use crate::error::{Error, NoneError, Result};
 use crate::photon::ensure_square;
 use crate::photon::rgb24_to_rgba32;
@@ -60,43 +61,6 @@ pub struct Frame {
     pub image: RgbImage,
     pub frame_num: u64,
     pub timestamp: f64,
-}
-
-//// Debug
-/// Write image to disk and pause execution.
-pub fn debug_image(image: &DynamicImage) -> Result<()> {
-    let preview_path = current_exe()?
-        .parent()
-        .ok_or(NoneError)?
-        .join("debug-image.bmp");
-    image.save(&preview_path)?;
-
-    println!("[debug] Preview image saved to {}", &preview_path.display());
-    println!("[debug] Press any key to continue...");
-    stdin().read_line(&mut String::new())?;
-    Ok(())
-}
-
-/// Write current frame to disk and pause execution.
-pub fn debug_frame(frame: &Frame) -> Result<()> {
-    println!(
-        "[debug] Execution paused on frame {} ({})",
-        frame.frame_num,
-        format_seconds(frame.timestamp)
-    );
-    debug_rgb(&frame.image)
-}
-
-/// Write image to disk and pause execution.
-pub fn debug_rgb(image: &RgbImage) -> Result<()> {
-    debug_image(&DynamicImage::ImageRgb8(image.clone()))
-}
-
-#[cfg(feature = "photon")]
-/// Write image to disk and pause execution.
-pub fn debug_photon_image(image: &PhotonImage) -> Result<()> {
-    let dynamic_image = dyn_image_from_raw(image);
-    debug_image(&dynamic_image)
 }
 
 //// Triggers

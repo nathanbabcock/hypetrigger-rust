@@ -23,6 +23,7 @@ pub mod threshold;
 #[cfg(feature = "tensorflow")]
 pub mod tensorflow;
 
+pub mod debug;
 pub mod error;
 #[cfg(feature = "tesseract")]
 pub mod tesseract;
