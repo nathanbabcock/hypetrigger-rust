@@ -206,7 +206,11 @@ pub struct TesseractTrigger {
 /// A breakpoint that writes the current/given image to disk and pauses
 /// execution on the current thread.
 pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
-    println!("[debug] Execution paused. Frame #{}", frame.frame_num);
+    println!(
+        "[debug] Execution paused on frame #{} ({})",
+        frame.frame_num,
+        format_seconds(frame.timestamp)
+    );
 
     let preview_path = current_exe()?
         .parent()
@@ -680,4 +684,37 @@ pub fn parse_ffmpeg_output_size(text: &str) -> Option<(u32, u32)> {
         }
         None => None,
     }
+}
+
+/// prints as e.g. `"1:23:45.5"`
+pub fn format_seconds(seconds: f64) -> String {
+    let mut time_left = seconds;
+
+    let hours = time_left as u64 / 3600;
+    time_left -= hours as f64 * 3600.0;
+
+    let minutes = time_left as u64 / 60;
+    time_left -= minutes as f64 * 60.0;
+
+    let seconds = time_left as u64;
+    time_left -= seconds as f64;
+
+    let milliseconds = (time_left * 1000.0).round() as u64;
+
+    let mut string = "".to_string();
+    if hours > 0 {
+        string += &format!("{}:", hours);
+    }
+    if minutes < 10 {
+        string += "0";
+    }
+    string += &format!("{}:", minutes);
+    if seconds < 10 {
+        string += "0";
+    }
+    string += &format!("{}", seconds);
+    if milliseconds > 0 {
+        string += &format!(".{}", milliseconds);
+    }
+    string
 }
