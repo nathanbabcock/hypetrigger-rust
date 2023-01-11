@@ -1,6 +1,6 @@
 use crate::error::NoneError;
 use crate::trigger::Frame;
-use crate::{error::Result, pipeline_simple::format_seconds};
+use crate::{error::Result, util::format_seconds};
 use image::{DynamicImage, RgbImage};
 use std::env::current_exe;
 use std::io::stdin;

@@ -1,7 +1,7 @@
 use crate::{
     error::{Error, NoneError, Result},
-    pipeline_simple::{command_to_string, parse_ffmpeg_output_size},
     trigger::{Frame, Trigger},
+    util::{command_to_string, parse_ffmpeg_output_size},
 };
 use image::RgbImage;
 use std::os::windows::process::CommandExt;
