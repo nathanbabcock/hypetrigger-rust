@@ -1,12 +1,28 @@
 use std::cell::RefCell;
 
 use hypetrigger::{
-    pipeline_simple::{Crop, Hypetrigger, TesseractTrigger},
+    pipeline_simple::{Crop, Error, Hypetrigger, SimpleTrigger, TesseractTrigger},
     tesseract::init_tesseract,
 };
 use tesseract::Tesseract;
 
-fn main() {
+fn main() -> Result<(), Error> {
+    Hypetrigger::new()
+        .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
+        .add_trigger(SimpleTrigger::new(Box::new(|frame| {
+            println!(
+                "received frame {}: {}x{}",
+                frame.frame_num,
+                frame.image.width(),
+                frame.image.height()
+            );
+            // Now do whatever you want with it...
+        })))
+        .run()
+        .map_err(Error::from_display)
+}
+
+fn main_tesseract() {
     println!("Hello world!");
 
     let tesseract = RefCell::new(Some(init_tesseract(None, None).unwrap()));

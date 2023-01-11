@@ -198,6 +198,29 @@ pub trait Trigger {
     }
 }
 
+/// Simple Trigger
+pub type SimpleTriggerCallback = dyn Fn(&Frame);
+
+/// A minimal Trigger implementation that just calls a callback on each frame.
+/// Functionally equivalent to a custom struct that implements `Trigger`, just
+/// with a callback instead of the `on_frame` trait method.
+pub struct SimpleTrigger {
+    pub callback: Box<SimpleTriggerCallback>,
+}
+
+impl Trigger for SimpleTrigger {
+    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
+        (self.callback)(frame);
+        Ok(())
+    }
+}
+
+impl SimpleTrigger {
+    pub fn new(on_frame: Box<SimpleTriggerCallback>) -> Box<Self> {
+        Box::new(Self { callback: on_frame })
+    }
+}
+
 //// Debug
 /// Write image to disk and pause execution.
 pub fn debug_image(image: &DynamicImage) -> Result<(), Error> {
@@ -245,8 +268,6 @@ pub struct TesseractTrigger {
 
 impl Trigger for TesseractTrigger {
     fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
-        debug_frame(frame)?;
-
         // 1. convert raw image to photon
         let image = rgb_to_photon(&frame.image);
 
@@ -269,6 +290,10 @@ impl TesseractTrigger {
     pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
         /// If `true`, pauses execution after each step of image pre-processing.
         const DEBUG: bool = false;
+        if DEBUG {
+            println!("[tesseract] received frame");
+            debug_photon_image(&image);
+        }
 
         // Crop
         if let Some(crop) = &self.crop {
@@ -300,7 +325,7 @@ impl TesseractTrigger {
         let padding_bg: Rgba = Rgba::new(255, 255, 255, 255);
         image = padding_uniform(&image, MIN_TESSERACT_IMAGE_SIZE, padding_bg);
         if DEBUG {
-            println!("[tesseract] padded");
+            println!("[tesseract] padded (done)");
             debug_photon_image(&image);
         }
 
@@ -755,7 +780,7 @@ pub fn format_seconds(seconds: f64) -> String {
 }
 
 #[cfg(feature = "photon")]
-/// Convert an Rgb DynamicImage (`image` crate) to a `PhotonImage` (`photon-rs` crate)
+/// Convert an `RgbImage` (`image` crate) to a `PhotonImage` (`photon-rs` crate)
 pub fn rgb_to_photon(rgb: &RgbImage) -> PhotonImage {
     let rgb24 = rgb.to_vec();
     let rgb32 = rgb24_to_rgba32(rgb24);
