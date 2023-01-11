@@ -447,8 +447,7 @@ impl TensorflowTrigger {
     }
 }
 
-//// "Threaded Triggers"
-
+//// Thread Triggers
 /// A wrapper around any other Trigger that sends it across a channel to run on
 /// a separate thread.
 pub struct ThreadTrigger {
@@ -488,6 +487,9 @@ pub struct RunnerThread {
 }
 
 impl RunnerThread {
+    /// Prepares a new thread capable of running Triggers, including the
+    /// communication channels, spawning the thread itself, and wrapping the
+    /// whole struct in an `Arc`.
     pub fn spawn() -> Arc<Self> {
         let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(100);
         let join_handle = std::thread::spawn(move || {
