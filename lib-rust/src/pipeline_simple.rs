@@ -251,7 +251,7 @@ pub fn debug_photon_image(image: &PhotonImage) -> Result<(), Error> {
 }
 
 //// Triggers
-pub trait Trigger {
+pub trait Trigger: Send + Sync {
     fn on_frame(&self, frame: &Frame) -> Result<(), Error>;
 
     /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
@@ -267,13 +267,11 @@ pub trait Trigger {
 }
 
 /// Simple Trigger
-pub type SimpleTriggerCallback = dyn Fn(&Frame);
-
 /// A minimal Trigger implementation that just calls a callback on each frame.
 /// Functionally equivalent to a custom struct that implements `Trigger`, just
 /// with a callback instead of the `on_frame` trait method.
 pub struct SimpleTrigger {
-    pub callback: Box<SimpleTriggerCallback>,
+    pub callback: Arc<dyn Fn(&Frame) + Send + Sync>,
 }
 
 impl Trigger for SimpleTrigger {
@@ -284,14 +282,19 @@ impl Trigger for SimpleTrigger {
 }
 
 impl SimpleTrigger {
-    pub fn new(on_frame: Box<SimpleTriggerCallback>) -> Box<Self> {
-        Box::new(Self { callback: on_frame })
+    pub fn new<T>(on_frame: T) -> Self
+    where
+        T: Fn(&Frame) + Send + Sync + 'static,
+    {
+        Self {
+            callback: Arc::new(on_frame),
+        }
     }
 }
 
 //// Tesseract
 pub struct TesseractTrigger {
-    pub tesseract: RefCell<Option<Tesseract>>,
+    pub tesseract: Arc<Mutex<Option<Tesseract>>>,
     pub crop: Option<Crop>,
     pub threshold_filter: Option<ThresholdFilter>,
     pub callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
@@ -368,11 +371,8 @@ impl TesseractTrigger {
         let buf = rgba32.as_slice();
         let channels = 4;
 
-        let mut tesseract = match self.tesseract.replace(None) {
-            Some(tesseract) => tesseract,
-            None => return Err("tesseract instance is missing".to_string()),
-        };
-
+        let mut mutex_guard = self.tesseract.lock().map_err(|e| e.to_string())?;
+        let mut tesseract = mutex_guard.take().ok_or("tesseract gone missing")?;
         tesseract = tesseract
             .set_frame(
                 buf,
@@ -385,7 +385,7 @@ impl TesseractTrigger {
             .set_source_resolution(96);
 
         let result = tesseract.get_text().map_err(|e| format!("get text: {}", e));
-        self.tesseract.replace(Some(tesseract));
+        mutex_guard.insert(tesseract);
         result
     }
 }
@@ -510,7 +510,7 @@ pub struct Hypetrigger {
     pub fps: u64,
 
     /// List of all callback functions to run on each frame of the video
-    pub triggers: Vec<Box<dyn Trigger>>,
+    pub triggers: Vec<Arc<dyn Trigger>>,
 }
 
 impl Default for Hypetrigger {
@@ -560,8 +560,11 @@ impl Hypetrigger {
     }
 
     /// Add a Trigger to be run on every frame of the input
-    pub fn add_trigger(&mut self, trigger: Box<dyn Trigger>) -> &mut Self {
-        self.triggers.push(trigger);
+    pub fn add_trigger<T>(&mut self, trigger: T) -> &mut Self
+    where
+        T: Trigger + Send + Sync + 'static,
+    {
+        self.triggers.push(Arc::new(trigger));
         self
     }
 
@@ -622,9 +625,8 @@ impl Hypetrigger {
         // Attach to ffmpeg
         let join_handle = thread::spawn(move || {
             // this blocks (on the inner thread) until the pipeline is done:
-            // self_arc
-            //     .attach(ffmpeg_stderr, ffmpeg_stdout)
-            //     .expect("pipeline should complete");
+            self.attach(ffmpeg_stderr, ffmpeg_stdout)
+                .expect("pipeline should complete");
         });
 
         Ok((join_handle, ffmpeg_stdin))

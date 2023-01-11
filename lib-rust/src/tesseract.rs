@@ -19,7 +19,7 @@ use std::{
     fs::{self, File},
     io::{self, stdin, Write},
     path::{Path, PathBuf},
-    sync::{mpsc::Receiver, Arc},
+    sync::{mpsc::Receiver, Arc, Mutex},
     time::Instant,
 };
 use tesseract::{InitializeError, Tesseract};
@@ -131,7 +131,8 @@ pub fn tesseract_runner(
                 let filtered = preprocess_image_for_tesseract(&image, trigger.filter.clone());
 
                 // 3. run ocr
-                let text = ocr(filtered, &tesseract);
+                // let text = ocr(filtered, &tesseract);
+                let text = "deprecated".to_string();
 
                 // 4. forward results to tx
                 let result = RunnerResultV2 {
@@ -189,7 +190,7 @@ pub fn download_tesseract_traineddata(download_path: &Path) -> Result<(), Error>
 pub fn init_tesseract(
     datapath: Option<&str>,
     language: Option<&str>,
-) -> Result<RefCell<Option<Tesseract>>, Error> {
+) -> Result<Arc<Mutex<Option<Tesseract>>>, Error> {
     let current_exe = std::env::current_exe()?;
     let default_datapath_pathbuf = current_exe.parent().unwrap().join(""); // this fixed something???
     let default_datapath = default_datapath_pathbuf.as_os_str().to_str().unwrap();
@@ -215,7 +216,7 @@ pub fn init_tesseract(
     }
 
     let tesseract = Tesseract::new(Some(datapath), Some(language))?;
-    Ok(RefCell::new(Some(tesseract)))
+    Ok(Arc::new(Mutex::new(Some(tesseract))))
 }
 
 /// Either apply a filter or pass through the original image

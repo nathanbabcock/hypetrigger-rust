@@ -9,7 +9,7 @@ use tesseract::Tesseract;
 fn main() -> Result<(), Error> {
     Hypetrigger::new()
         .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
-        .add_trigger(SimpleTrigger::new(Box::new(|frame| {
+        .add_trigger(SimpleTrigger::new(|frame| {
             println!(
                 "received frame {}: {}x{}",
                 frame.frame_num,
@@ -17,7 +17,7 @@ fn main() -> Result<(), Error> {
                 frame.image.height()
             );
             // Now do whatever you want with it...
-        })))
+        }))
         .run()
         .map_err(Error::from_display)
 }
@@ -40,7 +40,7 @@ fn main_tesseract() -> Result<(), Error> {
 
     Hypetrigger::new()
         .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
-        .add_trigger(Box::new(trigger))
+        .add_trigger(trigger)
         .run()
         .map_err(Error::from_display)
 }
