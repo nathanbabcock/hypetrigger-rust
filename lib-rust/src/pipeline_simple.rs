@@ -1,5 +1,6 @@
 use crate::photon::ensure_minimum_size;
 use crate::threshold::threshold_color_distance_rgba;
+use image::ImageError;
 use image::RgbImage;
 use photon_rs::transform::crop;
 use photon_rs::transform::padding_uniform;
@@ -8,6 +9,7 @@ use photon_rs::Rgb;
 use photon_rs::Rgba;
 use regex::Regex;
 use std::cell::RefCell;
+use std::env::current_exe;
 use std::error::Error as StdError;
 use std::fmt::Display;
 use std::fs::OpenOptions;
@@ -19,6 +21,7 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::ChildStderr;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::SendError;
 use std::thread;
 use std::thread::Scope;
 use std::thread::ScopedJoinHandle;
@@ -59,6 +62,17 @@ impl Error {
             source: Some(Box::new(e)),
         }
     }
+
+    /// Wrap any Display into a library Error.
+    pub fn from_display<E>(e: E) -> Self
+    where
+        E: Display,
+    {
+        Error {
+            message: e.to_string(),
+            source: None,
+        }
+    }
 }
 
 // pub type Result<T> = std::result::Result<T, Error>;
@@ -77,6 +91,12 @@ impl Display for NoneError {
 }
 impl std::error::Error for NoneError {}
 
+impl From<NoneError> for Error {
+    fn from(e: NoneError) -> Self {
+        Error::from_std(e)
+    }
+}
+
 #[cfg(feature = "tesseract")]
 impl From<reqwest::Error> for Error {
     fn from(e: reqwest::Error) -> Self {
@@ -90,9 +110,21 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<NoneError> for Error {
-    fn from(e: NoneError) -> Self {
+impl From<ImageError> for Error {
+    fn from(e: ImageError) -> Self {
         Error::from_std(e)
+    }
+}
+
+impl<T: Send + 'static> From<SendError<T>> for Error {
+    fn from(e: SendError<T>) -> Self {
+        Error::from_std(e)
+    }
+}
+
+impl From<String> for Error {
+    fn from(e: String) -> Self {
+        Error::from_display(e)
     }
 }
 
@@ -149,7 +181,7 @@ pub struct Frame {
 
 //// Triggers
 pub trait Trigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), String>;
+    fn on_frame(&self, frame: &Frame) -> Result<(), Error>;
 
     /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
     fn run_on_thread(self, runner_thread: RunnerThread) -> ThreadTrigger
@@ -171,21 +203,32 @@ pub struct TesseractTrigger {
     pub callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
 }
 
-pub fn debug_frame(frame: &Frame) {
+/// A breakpoint that writes the current/given image to disk and pauses
+/// execution on the current thread.
+pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
     println!("[debug] Execution paused. Frame #{}", frame.frame_num);
+
+    let preview_path = current_exe()?
+        .parent()
+        .ok_or(NoneError)?
+        .join("debug-image.bmp");
+    frame.image.save(&preview_path)?;
+
+    println!("[debug] Preview image saved to {}", &preview_path.display());
     println!("[debug] Press any key to continue...");
-    stdin().read_line(&mut String::new()).unwrap();
+    stdin().read_line(&mut String::new())?;
+    Ok(())
 }
 
 impl Trigger for TesseractTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
+    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
         // 1. convert raw image to photon
         let image = PhotonImage::new(
             frame.image.to_vec(),
             frame.image.width(),
             frame.image.height(),
         );
-        debug_frame(frame);
+        debug_frame(frame)?;
 
         // 2. preprocess
         let filtered = self.preprocess_image(image);
@@ -262,14 +305,12 @@ pub struct ThreadTrigger {
 }
 
 impl Trigger for ThreadTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), String> {
-        match self.runner_thread.tx.send(RunnerPayload {
+    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
+        self.runner_thread.tx.send(RunnerPayload {
             frame: frame.clone(),
             trigger: self.trigger.clone(),
-        }) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e.to_string()),
-        }
+        })?;
+        Ok(())
     }
 }
 
