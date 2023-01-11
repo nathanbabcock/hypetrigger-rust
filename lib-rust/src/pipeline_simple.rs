@@ -255,7 +255,7 @@ pub trait Trigger: Send + Sync {
     fn on_frame(&self, frame: &Frame) -> Result<(), Error>;
 
     /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
-    fn run_on_thread(self, runner_thread: RunnerThread) -> ThreadTrigger
+    fn into_thread(self, runner_thread: Arc<RunnerThread>) -> ThreadTrigger
     where
         Self: Sized + Send + Sync + 'static,
     {
@@ -452,45 +452,57 @@ impl TensorflowTrigger {
 /// A wrapper around any other Trigger that sends it across a channel to run on
 /// a separate thread.
 pub struct ThreadTrigger {
-    trigger: Arc<dyn Trigger + Send + Sync>,
-    runner_thread: RunnerThread,
+    pub trigger: Arc<dyn Trigger + Send + Sync>,
+    pub runner_thread: Arc<RunnerThread>,
 }
 
 impl Trigger for ThreadTrigger {
     fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
-        self.runner_thread.tx.send(RunnerPayload {
-            frame: frame.clone(),
-            trigger: self.trigger.clone(),
-        })?;
-        Ok(())
+        self.runner_thread
+            .tx
+            .send(RunnerPayload {
+                frame: frame.clone(),
+                trigger: self.trigger.clone(),
+            })
+            .map_err(Error::from_std)
+    }
+}
+
+impl ThreadTrigger {
+    pub fn new<T>(trigger: T, runner_thread: Arc<RunnerThread>) -> Self
+    where
+        T: Trigger + 'static,
+    {
+        Self {
+            trigger: Arc::new(trigger),
+            runner_thread,
+        }
     }
 }
 
 /// A separate thread that runs one or more ThreadedTriggers, by receiving them
 /// over a channel, paired with the frame to process.
 pub struct RunnerThread {
-    // rx: Receiver<RunnerPayload>,
     pub tx: SyncSender<RunnerPayload>,
     pub join_handle: JoinHandle<()>,
 }
 
-// TODO: redo with scoped threads
 impl RunnerThread {
-    pub fn spawn(buffer_size: usize) -> Self {
-        let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(buffer_size);
+    pub fn spawn() -> Arc<Self> {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(100);
         let join_handle = std::thread::spawn(move || {
             while let Ok(payload) = rx.recv() {
                 payload.trigger.on_frame(&payload.frame);
             }
         });
-        Self { tx, join_handle }
+        Arc::new(Self { tx, join_handle })
     }
 }
 
 /// Everything a RunnerThread needs to run a ThreadedTrigger
 pub struct RunnerPayload {
     frame: Frame,
-    trigger: Arc<dyn Trigger + Send + Sync>,
+    trigger: Arc<dyn Trigger>,
 }
 
 //// Pipeline
