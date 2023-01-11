@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 
 use hypetrigger::{
+    async_trigger::{AsyncTrigger, TriggerThread},
     error::{Error, Result},
     photon::Crop,
-    pipeline_simple::{Hypetrigger, RunnerThread, ThreadTrigger},
+    pipeline_simple::Hypetrigger,
     simple_trigger::SimpleTrigger,
     tesseract::{init_tesseract, TesseractTrigger},
 };
@@ -51,7 +52,7 @@ fn main_tesseract() -> Result<()> {
 fn main_threaded() -> Result<()> {
     println!("Hello world!");
 
-    let runner_thread = RunnerThread::spawn();
+    let runner_thread = TriggerThread::spawn();
     let tesseract = init_tesseract(None, None)?;
     let base_trigger = TesseractTrigger {
         tesseract,
@@ -64,7 +65,7 @@ fn main_threaded() -> Result<()> {
         threshold_filter: None,
         callback: None,
     };
-    let trigger = ThreadTrigger::new(base_trigger, runner_thread.clone());
+    let trigger = AsyncTrigger::from(base_trigger, runner_thread.clone());
 
     Hypetrigger::new()
         .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())

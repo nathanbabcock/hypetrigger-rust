@@ -14,6 +14,7 @@ pub mod tensorflow;
 pub mod tesseract;
 
 pub mod any;
+pub mod async_trigger;
 pub mod config;
 pub mod debug;
 pub mod debugger;

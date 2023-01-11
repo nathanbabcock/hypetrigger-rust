@@ -55,66 +55,6 @@ use tensorflow::Status;
 use tesseract::InitializeError;
 use tesseract::Tesseract;
 
-//// Thread Triggers
-/// A wrapper around any other Trigger that sends it across a channel to run on
-/// a separate thread.
-pub struct ThreadTrigger {
-    pub trigger: Arc<dyn Trigger + Send + Sync>,
-    pub runner_thread: Arc<RunnerThread>,
-}
-
-impl Trigger for ThreadTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<()> {
-        self.runner_thread
-            .tx
-            .send(RunnerPayload {
-                frame: frame.clone(),
-                trigger: self.trigger.clone(),
-            })
-            .map_err(Error::from_std)
-    }
-}
-
-impl ThreadTrigger {
-    pub fn new<T>(trigger: T, runner_thread: Arc<RunnerThread>) -> Self
-    where
-        T: Trigger + 'static,
-    {
-        Self {
-            trigger: Arc::new(trigger),
-            runner_thread,
-        }
-    }
-}
-
-/// A separate thread that runs one or more ThreadedTriggers, by receiving them
-/// over a channel, paired with the frame to process.
-pub struct RunnerThread {
-    pub tx: SyncSender<RunnerPayload>,
-    pub join_handle: JoinHandle<()>,
-}
-
-impl RunnerThread {
-    /// Prepares a new thread capable of running Triggers, including the
-    /// communication channels, spawning the thread itself, and wrapping the
-    /// whole struct in an `Arc`.
-    pub fn spawn() -> Arc<Self> {
-        let (tx, rx) = std::sync::mpsc::sync_channel::<RunnerPayload>(100);
-        let join_handle = std::thread::spawn(move || {
-            while let Ok(payload) = rx.recv() {
-                payload.trigger.on_frame(&payload.frame);
-            }
-        });
-        Arc::new(Self { tx, join_handle })
-    }
-}
-
-/// Everything a RunnerThread needs to run a ThreadedTrigger
-pub struct RunnerPayload {
-    frame: Frame,
-    trigger: Arc<dyn Trigger>,
-}
-
 //// Pipeline
 pub struct Hypetrigger {
     // Path the the ffmpeg binary or command to use
