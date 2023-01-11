@@ -11,6 +11,7 @@ use crate::tensorflow::predict;
 use crate::tensorflow::Prediction;
 use crate::tensorflow::TENSOR_SIZE;
 use crate::threshold::threshold_color_distance_rgba;
+use crate::trigger::{Frame, Trigger};
 use image::DynamicImage;
 use image::ImageError;
 use image::RgbImage;
@@ -53,31 +54,6 @@ use tensorflow::SavedModelBundle;
 use tensorflow::Status;
 use tesseract::InitializeError;
 use tesseract::Tesseract;
-
-/// Represents a single frame of the input, including the raw image pixels as
-/// well as the time it appears in the input (frame_num and/or timestamp)
-#[derive(Clone)]
-pub struct Frame {
-    pub image: RgbImage,
-    pub frame_num: u64,
-    pub timestamp: f64,
-}
-
-//// Triggers
-pub trait Trigger: Send + Sync {
-    fn on_frame(&self, frame: &Frame) -> Result<()>;
-
-    /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
-    fn into_thread(self, runner_thread: Arc<RunnerThread>) -> ThreadTrigger
-    where
-        Self: Sized + Send + Sync + 'static,
-    {
-        ThreadTrigger {
-            trigger: Arc::new(self),
-            runner_thread,
-        }
-    }
-}
 
 /// Simple Trigger
 /// A minimal Trigger implementation that just calls a callback on each frame.
@@ -376,7 +352,7 @@ impl Hypetrigger {
     /// Add a Trigger to be run on every frame of the input
     pub fn add_trigger<T>(&mut self, trigger: T) -> &mut Self
     where
-        T: Trigger + Send + Sync + 'static,
+        T: Trigger + 'static,
     {
         self.triggers.push(Arc::new(trigger));
         self

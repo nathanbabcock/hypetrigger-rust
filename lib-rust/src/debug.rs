@@ -1,5 +1,5 @@
 use crate::error::NoneError;
-use crate::pipeline_simple::Frame;
+use crate::trigger::Frame;
 use crate::{error::Result, pipeline_simple::format_seconds};
 use image::{DynamicImage, RgbImage};
 use std::env::current_exe;
@@ -34,8 +34,8 @@ pub fn debug_rgb(image: &RgbImage) -> Result<()> {
     debug_image(&DynamicImage::ImageRgb8(image.clone()))
 }
 
-#[cfg(feature = "photon")]
 /// Write image to disk and pause execution.
+#[cfg(feature = "photon")]
 pub fn debug_photon_image(image: &photon_rs::PhotonImage) -> Result<()> {
     let dynamic_image = photon_rs::helpers::dyn_image_from_raw(image);
     debug_image(&dynamic_image)
