@@ -1,7 +1,9 @@
 use crate::photon::ensure_minimum_size;
 use crate::threshold::threshold_color_distance_rgba;
+use image::DynamicImage;
 use image::ImageError;
 use image::RgbImage;
+use photon_rs::helpers::dyn_image_from_raw;
 use photon_rs::transform::crop;
 use photon_rs::transform::padding_uniform;
 use photon_rs::PhotonImage;
@@ -195,33 +197,49 @@ pub trait Trigger {
     }
 }
 
-//// Tesseract
-pub struct TesseractTrigger {
-    pub tesseract: RefCell<Option<Tesseract>>,
-    pub crop: Option<Crop>,
-    pub threshold_filter: Option<ThresholdFilter>,
-    pub callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
+//// Debug
+/// Write image to disk and pause execution.
+pub fn debug_image(image: &DynamicImage) -> Result<(), Error> {
+    let preview_path = current_exe()?
+        .parent()
+        .ok_or(NoneError)?
+        .join("debug-image.bmp");
+    image.save(&preview_path)?;
+
+    println!("[debug] Preview image saved to {}", &preview_path.display());
+    println!("[debug] Press any key to continue...");
+    stdin().read_line(&mut String::new())?;
+    Ok(())
 }
 
-/// A breakpoint that writes the current/given image to disk and pauses
-/// execution on the current thread.
+/// Write current frame to disk and pause execution.
 pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
     println!(
         "[debug] Execution paused on frame #{} ({})",
         frame.frame_num,
         format_seconds(frame.timestamp)
     );
+    debug_rgb(&frame.image)
+}
 
-    let preview_path = current_exe()?
-        .parent()
-        .ok_or(NoneError)?
-        .join("debug-image.bmp");
-    frame.image.save(&preview_path)?;
+/// Write image to disk and pause execution.
+pub fn debug_rgb(image: &RgbImage) -> Result<(), Error> {
+    debug_image(&DynamicImage::ImageRgb8(image.clone()))
+}
 
-    println!("[debug] Preview image saved to {}", &preview_path.display());
-    println!("[debug] Press any key to continue...");
-    stdin().read_line(&mut String::new())?;
-    Ok(())
+#[cfg(feature = "photon")]
+/// Write image to disk and pause execution.
+pub fn debug_photon_image(image: &PhotonImage) -> Result<(), Error> {
+    let dynamic_image = dyn_image_from_raw(image);
+    debug_image(&dynamic_image)
+}
+
+//// Tesseract
+pub struct TesseractTrigger {
+    pub tesseract: RefCell<Option<Tesseract>>,
+    pub crop: Option<Crop>,
+    pub threshold_filter: Option<ThresholdFilter>,
+    pub callback: Option<Box<dyn Fn(&str) + Send + Sync>>,
 }
 
 impl Trigger for TesseractTrigger {

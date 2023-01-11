@@ -11,14 +11,15 @@ name = "hypetrigger-test"
 path = "src/main.rs"
 
 [features]
-default = ["tesseract", "tensorflow", "console_error_panic_hook"]
-tesseract = ["dep:reqwest", "dep:tesseract"]
-tensorflow = ["dep:tensorflow"]
+default = ["photon", "tesseract", "tensorflow", "console_error_panic_hook"]
+photon = ["dep:photon-rs"]
+tesseract = ["photon", "dep:reqwest", "dep:tesseract"]
+tensorflow = ["photon", "dep:tensorflow"]
 # todo: wasm feature
 # todo: photon-rs feature
 
 [dependencies]
-photon-rs = "0.3.1"
+photon-rs = { version = "0.3.1", optional = true }
 wasm-bindgen = "0.2.83"
 derive_builder = "0.12.0"
 open = "3.2.0"
