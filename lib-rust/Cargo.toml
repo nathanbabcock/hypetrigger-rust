@@ -1,13 +1,19 @@
 [package]
 name = "hypetrigger"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2021"
+authors = ["Nathan Babcock <nathan.r.babcock@gmail.com>"]
+description = "GPU-accelerated computer vision pipeline for native and web"
+homepage = "https://hypetrigger.io"
+categories = ["computer-vision", "multimedia", "wasm"]
+keywords = ["ffmpeg", "tensorflow", "tesseract", "photon", "webassembly", "image processing", "computer vision", "gpu"]
+repository = "https://github.com/nathanbabcock/hypetrigger"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "hypetrigger"
+name = "hypetrigger-test"
 path = "src/main.rs"
 
 [features]
