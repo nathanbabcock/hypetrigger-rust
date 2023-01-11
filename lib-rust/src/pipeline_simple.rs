@@ -1,3 +1,4 @@
+use crate::error::{Error, NoneError, Result};
 use crate::photon::ensure_minimum_size;
 use crate::photon::ensure_size;
 use crate::photon::ensure_square;
@@ -20,7 +21,6 @@ use photon_rs::Rgba;
 use regex::Regex;
 use std::cell::RefCell;
 use std::env::current_exe;
-use std::error::Error as StdError;
 use std::fmt::Display;
 use std::fs::OpenOptions;
 use std::io::stdin;
@@ -33,6 +33,7 @@ use std::process::ChildStdin;
 use std::process::ChildStdout;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::SendError;
+use std::sync::Mutex;
 use std::thread;
 use std::thread::Scope;
 use std::thread::ScopedJoinHandle;
@@ -41,125 +42,15 @@ use std::{
     process::{Child, Command, Stdio},
     sync::{
         mpsc::{Receiver, SyncSender},
-        Arc, Mutex,
+        Arc,
     },
     thread::JoinHandle,
 };
 use tensorflow::Graph;
 use tensorflow::SavedModelBundle;
 use tensorflow::Status;
-use tesseract::plumbing::TessBaseApiSetImageSafetyError;
 use tesseract::InitializeError;
 use tesseract::Tesseract;
-
-//// Error handling
-#[derive(Debug)]
-pub struct Error {
-    source: Option<Box<dyn StdError + 'static>>,
-    message: String,
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl StdError for Error {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        self.source.as_ref().map(|e| &**e)
-    }
-}
-
-impl Error {
-    /// Wrap any standard Error into a library Error.
-    /// Similar to [`anyhow`](https://github.com/dtolnay/anyhow/blob/master/src/error.rs#L88).
-    pub fn from_std<E>(e: E) -> Self
-    where
-        E: std::error::Error + 'static,
-    {
-        Error {
-            message: e.to_string(),
-            source: Some(Box::new(e)),
-        }
-    }
-
-    /// Wrap any Display into a library Error.
-    pub fn from_display<E>(e: E) -> Self
-    where
-        E: Display,
-    {
-        Error {
-            message: e.to_string(),
-            source: None,
-        }
-    }
-}
-
-// pub type Result<T> = std::result::Result<T, Error>;
-
-/// Represents an attempt to unwrap a None value from an Option.
-///
-/// ```rs
-/// let value = Some(x).ok_or(NoneError)?;
-/// ```
-#[derive(Debug)]
-pub struct NoneError;
-impl Display for NoneError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "called unwrap() on None")
-    }
-}
-impl std::error::Error for NoneError {}
-
-impl From<NoneError> for Error {
-    fn from(e: NoneError) -> Self {
-        Error::from_std(e)
-    }
-}
-
-#[cfg(feature = "tesseract")]
-impl From<reqwest::Error> for Error {
-    fn from(e: reqwest::Error) -> Self {
-        Error::from_std(e)
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self {
-        Error::from_std(e)
-    }
-}
-
-impl From<ImageError> for Error {
-    fn from(e: ImageError) -> Self {
-        Error::from_std(e)
-    }
-}
-
-impl<T: Send + 'static> From<SendError<T>> for Error {
-    fn from(e: SendError<T>) -> Self {
-        Error::from_std(e)
-    }
-}
-
-impl From<String> for Error {
-    fn from(e: String) -> Self {
-        Error::from_display(e)
-    }
-}
-
-impl From<InitializeError> for Error {
-    fn from(e: InitializeError) -> Self {
-        Error::from_std(e)
-    }
-}
-
-impl From<Status> for Error {
-    fn from(e: Status) -> Self {
-        Error::from_std(e)
-    }
-}
 
 //// Image processing
 pub trait ImageTransform {
@@ -214,7 +105,7 @@ pub struct Frame {
 
 //// Debug
 /// Write image to disk and pause execution.
-pub fn debug_image(image: &DynamicImage) -> Result<(), Error> {
+pub fn debug_image(image: &DynamicImage) -> Result<()> {
     let preview_path = current_exe()?
         .parent()
         .ok_or(NoneError)?
@@ -228,7 +119,7 @@ pub fn debug_image(image: &DynamicImage) -> Result<(), Error> {
 }
 
 /// Write current frame to disk and pause execution.
-pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
+pub fn debug_frame(frame: &Frame) -> Result<()> {
     println!(
         "[debug] Execution paused on frame {} ({})",
         frame.frame_num,
@@ -238,20 +129,20 @@ pub fn debug_frame(frame: &Frame) -> Result<(), Error> {
 }
 
 /// Write image to disk and pause execution.
-pub fn debug_rgb(image: &RgbImage) -> Result<(), Error> {
+pub fn debug_rgb(image: &RgbImage) -> Result<()> {
     debug_image(&DynamicImage::ImageRgb8(image.clone()))
 }
 
 #[cfg(feature = "photon")]
 /// Write image to disk and pause execution.
-pub fn debug_photon_image(image: &PhotonImage) -> Result<(), Error> {
+pub fn debug_photon_image(image: &PhotonImage) -> Result<()> {
     let dynamic_image = dyn_image_from_raw(image);
     debug_image(&dynamic_image)
 }
 
 //// Triggers
 pub trait Trigger: Send + Sync {
-    fn on_frame(&self, frame: &Frame) -> Result<(), Error>;
+    fn on_frame(&self, frame: &Frame) -> Result<()>;
 
     /// Convert this Trigger into a ThreadTrigger, running on a separate thread.
     fn into_thread(self, runner_thread: Arc<RunnerThread>) -> ThreadTrigger
@@ -274,7 +165,7 @@ pub struct SimpleTrigger {
 }
 
 impl Trigger for SimpleTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
+    fn on_frame(&self, frame: &Frame) -> Result<()> {
         (self.callback)(frame);
         Ok(())
     }
@@ -300,7 +191,7 @@ pub struct TesseractTrigger {
 }
 
 impl Trigger for TesseractTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
+    fn on_frame(&self, frame: &Frame) -> Result<()> {
         // 1. convert raw image to photon
         let image = rgb_to_photon(&frame.image);
 
@@ -365,7 +256,7 @@ impl TesseractTrigger {
         image
     }
 
-    pub fn ocr(&self, image: PhotonImage) -> Result<String, String> {
+    pub fn ocr(&self, image: PhotonImage) -> std::result::Result<String, String> {
         let rgba32 = image.get_raw_pixels();
         let buf = rgba32.as_slice();
         let channels = 4;
@@ -398,7 +289,7 @@ pub struct TensorflowTrigger {
 }
 
 impl Trigger for TensorflowTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
+    fn on_frame(&self, frame: &Frame) -> Result<()> {
         // 1. convert raw image to photon
         let image = rgb_to_photon(&frame.image);
 
@@ -455,7 +346,7 @@ pub struct ThreadTrigger {
 }
 
 impl Trigger for ThreadTrigger {
-    fn on_frame(&self, frame: &Frame) -> Result<(), Error> {
+    fn on_frame(&self, frame: &Frame) -> Result<()> {
         self.runner_thread
             .tx
             .send(RunnerPayload {
@@ -570,7 +461,7 @@ impl Hypetrigger {
 
     // --- Behavior ---
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
-    pub fn run(&mut self) -> Result<(), String> {
+    pub fn run(&mut self) -> std::result::Result<(), String> {
         // Init logging
         println!("[hypetrigger] run()");
 
@@ -610,7 +501,7 @@ impl Hypetrigger {
         Ok(())
     }
 
-    pub fn run_async(self) -> Result<(JoinHandle<()>, ChildStdin), Error> {
+    pub fn run_async(self) -> Result<(JoinHandle<()>, ChildStdin)> {
         println!("[hypetrigger] run_async()");
 
         // Spawn FFMPEG command
@@ -635,7 +526,7 @@ impl Hypetrigger {
         &self,
         mut ffmpeg_stderr: ChildStderr,
         mut ffmpeg_stdout: ChildStdout,
-    ) -> Result<(), String> {
+    ) -> std::result::Result<(), String> {
         // Enter a new scope that will block until ffmpeg_stderr_thread is done
         thread::scope(|scope| {
             // Spawn a thread to read stderr from ffmpeg
@@ -734,7 +625,7 @@ impl Hypetrigger {
         scope: &'scope Scope<'scope, '_>, // scope scope scope scope wheeee
     ) -> io::Result<(
         Receiver<(u32, u32)>,
-        ScopedJoinHandle<'scope, Result<(), String>>,
+        ScopedJoinHandle<'scope, std::result::Result<(), String>>,
     )> {
         let (output_size_tx, output_size_rx) = channel::<(u32, u32)>();
         let thread_body = move || {

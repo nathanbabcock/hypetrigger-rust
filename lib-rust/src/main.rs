@@ -1,14 +1,13 @@
 use std::cell::RefCell;
 
 use hypetrigger::{
-    pipeline_simple::{
-        Crop, Error, Hypetrigger, RunnerThread, SimpleTrigger, TesseractTrigger, Trigger,
-    },
+    error::{Error, Result},
+    pipeline_simple::{Crop, Hypetrigger, RunnerThread, SimpleTrigger, TesseractTrigger, Trigger},
     tesseract::init_tesseract,
 };
 use tesseract::Tesseract;
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     Hypetrigger::new()
         .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
         .add_trigger(SimpleTrigger::new(|frame| {
@@ -24,7 +23,7 @@ fn main() -> Result<(), Error> {
         .map_err(Error::from_display)
 }
 
-fn main_tesseract() -> Result<(), Error> {
+fn main_tesseract() -> Result<()> {
     println!("Hello world!");
 
     let tesseract = init_tesseract(None, None)?;
@@ -47,7 +46,7 @@ fn main_tesseract() -> Result<(), Error> {
         .map_err(Error::from_display)
 }
 
-fn main_threaded() -> Result<(), Error> {
+fn main_threaded() -> Result<()> {
     println!("Hello world!");
 
     let runner_thread = RunnerThread::spawn();

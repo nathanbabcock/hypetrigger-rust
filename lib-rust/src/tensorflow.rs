@@ -154,7 +154,7 @@ pub fn init_tensorflow(triggers: &Triggers) -> ModelMap {
 
 pub fn load_tensorflow_model<P>(
     model_dir: P,
-) -> Result<(SavedModelBundle, Graph), crate::pipeline_simple::Error>
+) -> Result<(SavedModelBundle, Graph), crate::error::Error>
 where
     P: AsRef<Path>,
 {
@@ -200,7 +200,7 @@ pub fn predict(
     bundle: &SavedModelBundle,
     graph: &Graph,
     tensor: &Tensor<f32>,
-) -> Result<Prediction, crate::pipeline_simple::Error> {
+) -> Result<Prediction, crate::error::Error> {
     let mut args = SessionRunArgs::new();
 
     // get in/out operations
