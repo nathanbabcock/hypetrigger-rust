@@ -1,419 +1,287 @@
-// use std::{
-//     collections::HashMap,
-//     error::Error,
-//     io::{self, Write},
-//     process::{Child, ChildStdin, Stdio},
-//     sync::{Arc, Mutex, RwLock},
-//     thread::JoinHandle,
-// };
+use crate::{
+    error::{Error, NoneError, Result},
+    pipeline_simple::{command_to_string, parse_ffmpeg_output_size},
+    trigger::{Frame, Trigger},
+};
+use image::RgbImage;
+use std::os::windows::process::CommandExt;
+use std::{
+    io::BufRead,
+    process::{ChildStdin, ChildStdout, Command, Stdio},
+    thread::JoinHandle,
+};
+use std::{
+    io::BufReader,
+    process::ChildStderr,
+    sync::{
+        mpsc::{channel, Receiver},
+        Arc,
+    },
+    thread::{self, Scope, ScopedJoinHandle},
+};
+use std::{io::Read, process::Child};
 
-// use crate::{
-//     config::HypetriggerConfig,
-//     debugger::{Debugger, DebuggerRef},
-//     emit::OnEmit,
-//     ffmpeg::{
-//         on_ffmpeg_stderr, on_ffmpeg_stdout, send_ffmpeg_stop_signal, spawn_ffmpeg_childprocess,
-//         spawn_ffmpeg_stderr_thread, spawn_ffmpeg_stdout_thread, GetRunnerThread, OnFfmpegStderr,
-//         OnFfmpegStdout, SpawnFfmpegChildprocess, SpawnFfmpegStderrThread, SpawnFfmpegStdoutThread,
-//         StdioConfig,
-//     },
-//     runner::{spawn_runner_thread, RunnerFn, WorkerThread},
-//     tensorflow::TENSORFLOW_RUNNER,
-//     tesseract::TESSERACT_RUNNER,
-// };
+#[derive(Clone)]
+pub struct Hypetrigger {
+    // Path the the ffmpeg binary or command to use
+    pub ffmpeg_exe: String,
 
-// pub type Jobs = HashMap<String, HypetriggerJob>;
-// pub type RunnerThreads = Arc<RwLock<HashMap<String, Arc<WorkerThread>>>>;
-// pub type OnPanic = Arc<dyn Fn(Box<dyn Error>) + Send + Sync>;
+    /// Path to input video (or image) for ffmpeg
+    pub input: String,
 
-// /// A multithreaded pipeline of execution
-// ///
-// /// FFMPEG -> Tesseract/Tensorflow -> Emit
-// #[derive(Builder)]
-// pub struct Pipeline {
-//     // --- Config params ---
-//     /// Path to the FFMPEG executable (defaults to "ffmpeg" command in system PATH)
-//     #[builder(default = "\"ffmpeg\".into()")]
-//     pub ffmpeg_exe: String,
+    /// Framerate to sample the input video at. This can (an should) by much
+    /// lower than the input video's native framerate. 2-4 frames per second is
+    /// more than sufficient to capture most events.
+    pub fps: u64,
 
-//     /// Turn on or off different logging channels (ffmpeg, tesseract, tensorflow, etc.)
-//     #[builder(default = "Arc::new(RwLock::new(Debugger::default()))")]
-//     pub debugger: DebuggerRef,
+    /// List of all callback functions to run on each frame of the video
+    pub triggers: Vec<Arc<dyn Trigger>>,
+}
 
-//     // --- Callbacks ---
-//     /// Callback that runs inside a Runner thread when a result for a frame has
-//     /// been obtained.
-//     ///
-//     /// - For Tesseract, this contains recognized text
-//     /// - For Tensorflow, this contains the image classification label & confidence
-//     /// - For custom Runners, it contains whatever data you pass along in the implementation
-//     ///
-//     /// Logs to console by default.
-//     /// @deprecated
-//     // #[builder(default = "Arc::new(emit_stdout)")]
-//     // on_emit: OnEmit,
+impl Default for Hypetrigger {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-//     /// Callback for each line of FFMPEG stderr
-//     /// Useful for redirecting logs to program stdout or elsewhere,
-//     /// or extracting metadata or progress.
-//     ///
-//     /// If `None`, no thread is spawned to listen for FFMPEG stdout.
-//     #[builder(default = "Some(Arc::new(on_ffmpeg_stderr))")]
-//     on_ffmpeg_stderr: OnFfmpegStderr,
+impl Hypetrigger {
+    // --- Constructor ---
+    pub fn new() -> Self {
+        Self {
+            ffmpeg_exe: "ffmpeg".to_string(),
+            input: "".to_string(),
+            fps: 2,
+            triggers: vec![],
+        }
+    }
 
-//     /// Callback for each line of FFMPEG stdout.
-//     /// It includes the image pixels as `RawImageData`, and corresponding `Trigger`.
-//     ///
-//     /// The default implementation then forwards this to the appropriate Runner
-//     /// thread -- not typically changed.
-//     #[builder(default = "Arc::new(on_ffmpeg_stdout)")]
-//     on_ffmpeg_stdout: OnFfmpegStdout,
+    // --- Getters and setters ---
+    /// Setter for the ffmpeg binary or command to use
+    pub fn set_ffmpeg_exe(&mut self, ffmpeg_exe: String) -> &mut Self {
+        self.ffmpeg_exe = ffmpeg_exe;
+        self
+    }
 
-//     // --- Other moduler core behavior ---
-//     #[builder(default = "Arc::new(spawn_ffmpeg_childprocess)")]
-//     spawn_ffmpeg_childprocess: SpawnFfmpegChildprocess,
+    /// Setter for the input video (or image) for ffmpeg
+    pub fn set_input(&mut self, input: String) -> &mut Self {
+        self.input = input;
+        self
+    }
 
-//     #[builder(default = "Arc::new(spawn_ffmpeg_stderr_thread)")]
-//     spawn_ffmpeg_stderr_thread: SpawnFfmpegStderrThread,
+    /// Setter for the framerate to sample the input video at.
+    pub fn set_fps(&mut self, fps: u64) -> &mut Self {
+        self.fps = fps;
+        self
+    }
 
-//     #[builder(default = "Arc::new(spawn_ffmpeg_stdout_thread)")]
-//     spawn_ffmpeg_stdout_thread: SpawnFfmpegStdoutThread,
+    /// Add a Trigger to be run on every frame of the input
+    pub fn add_trigger<T>(&mut self, trigger: T) -> &mut Self
+    where
+        T: Trigger + 'static,
+    {
+        self.triggers.push(Arc::new(trigger));
+        self
+    }
 
-//     #[builder(default = "Arc::new(spawn_runner_threads)")]
-//     spawn_runner_threads: SpawnRunnerThreads,
+    // --- Behavior ---
+    /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
+    pub fn run(&mut self) -> Result<()> {
+        println!("[hypetrigger] run()");
 
-//     /// Required in order to stop a job by sending commands to ffmpeg via stdin
-//     #[builder(default = "true")]
-//     enable_ffmpeg_stdin: bool,
+        // Spawn FFMPEG command
+        let mut ffmpeg_child = self.spawn_ffmpeg_child()?;
+        let ffmpeg_stderr = ffmpeg_child.stderr.take().ok_or(NoneError)?;
+        let ffmpeg_stdout = ffmpeg_child.stdout.take().ok_or(NoneError)?;
 
-//     // --- Pipeline state ---
-//     /// Pointers to functions that spawn Runners,
-//     /// so that they can be called automatically when needed
-//     /// (eagerly at startup, or lazily when required by a job)
-//     #[builder(default = "HashMap::new()")]
-//     runners: HashMap<String, RunnerFn>,
+        // Attach to ffmpeg
+        self.attach(ffmpeg_stderr, ffmpeg_stdout)?;
 
-//     /// Tracks the current runner threads
-//     /// (e.g. Tensorflow, Tesseract, etc.)
-//     ///
-//     /// This must be kept separate from `Pipeline::runners` because the inner thread
-//     /// JoinHandles are not cloneable, so can't be used in the Builder.
-//     #[builder(setter(skip))]
-//     runner_threads: RunnerThreads,
+        // Block until ffmpeg finishes
+        let ffmpeg_exit_status = ffmpeg_child.wait()?;
+        println!(
+            "[ffmpeg] ffmpeg command exited with status {}",
+            ffmpeg_exit_status
+        );
 
-//     /// Tracks the currently running Jobs.
-//     /// Each job will have its own instance of FFMPEG,
-//     /// but will share runner threads.
-//     #[builder(setter(skip), default = "HashMap::new()")]
-//     jobs: Jobs,
-// }
+        Ok(())
+    }
 
-// impl PipelineBuilder {
-//     pub fn register_runner(&mut self, name: String, runner: RunnerFn) -> &mut Self {
-//         match self.runners {
-//             Some(ref mut hashmap) => hashmap.insert(name, runner),
-//             None => {
-//                 self.runners = Some(HashMap::new());
-//                 return self.register_runner(name, runner);
-//             }
-//         };
-//         self
-//     }
-// }
+    pub fn run_async(self) -> Result<(JoinHandle<()>, ChildStdin)> {
+        println!("[hypetrigger] run_async()");
 
-// impl Pipeline {
-//     pub fn builder() -> PipelineBuilder {
-//         PipelineBuilder::default()
-//     }
+        // Spawn FFMPEG command
+        let mut ffmpeg_child = self.spawn_ffmpeg_child()?;
 
-//     /// Starts a thread for the given Runner.
-//     /// If a thread for the given Runner already exists, nothing is changed.
-//     /// Runner must already be registered (e.g. a name mapped to a spawn function)
-//     pub fn spawn_runner(
-//         &mut self,
-//         name: String,
-//         config: Arc<HypetriggerConfig>,
-//         on_panic: OnPanic,
-//     ) {
-//         if let Some(_) = self
-//             .runner_threads
-//             .read()
-//             .expect("acquire runner threads read lock")
-//             .get(&name)
-//         {
-//             return;
-//         }
-//         let runner_fn = *self
-//             .runners
-//             .get(&name)
-//             .unwrap_or_else(|| panic!("get runner fn for {}", name));
-//         let worker = spawn_runner_thread(name.clone(), runner_fn, config, on_panic.clone());
-//         self.runner_threads
-//             .write()
-//             .expect("acquire runner threads write lock")
-//             .insert(name, Arc::new(worker));
-//     }
+        // Separate each stdio channel to use in different places
+        let ffmpeg_stderr = ffmpeg_child.stderr.take().ok_or(NoneError)?;
+        let ffmpeg_stdout = ffmpeg_child.stdout.take().ok_or(NoneError)?;
+        let ffmpeg_stdin = ffmpeg_child.stdin.take().ok_or(NoneError)?;
 
-//     /// Spawns a thread for every registered Runner in the pipeline.
-//     /// These will idle and wait for input if no jobs are running yet.
-//     // pub fn spawn_all_runners(&mut self) {
-//     //     let keys = self.runners.keys().cloned().collect::<Vec<_>>();
-//     //     for name in keys {
-//     //         self.spawn_runner(name, config);
-//     //     }
-//     // }
+        // Attach to ffmpeg
+        let join_handle = thread::spawn(move || {
+            // this blocks (on the inner thread) until the pipeline is done:
+            self.attach(ffmpeg_stderr, ffmpeg_stdout)
+                .expect("pipeline should complete");
+        });
 
-//     /// Spawns only the runners needed for a given job.
-//     pub fn spawn_runners_for_config(&mut self, config: Arc<HypetriggerConfig>, on_panic: OnPanic) {
-//         for trigger in &config.triggers {
-//             self.spawn_runner(
-//                 trigger.get_runner_type().clone(),
-//                 config.clone(),
-//                 on_panic.clone(),
-//             );
-//         }
-//     }
+        Ok((join_handle, ffmpeg_stdin))
+    }
 
-//     /// Determines which FFMPEG stdio channels to listen to,
-//     /// based on the Pipeline's registered callbacks.
-//     pub fn ffmpeg_stdio_config(&mut self) -> StdioConfig {
-//         StdioConfig {
-//             // stderr automatically disabled if unused
-//             stderr: if self.on_ffmpeg_stderr.is_some() {
-//                 Stdio::piped()
-//             } else {
-//                 Stdio::null()
-//             },
+    /// Set up the watchers for the ffmpeg process on stdout and stderr. Stderr
+    /// will run in a separate scoped thread, while stdout will run on the
+    /// current thread, and then block until completion.
+    pub fn attach(
+        &self,
+        mut ffmpeg_stderr: ChildStderr,
+        mut ffmpeg_stdout: ChildStdout,
+    ) -> Result<()> {
+        // Enter a new scope that will block until ffmpeg_stderr_thread is done
+        thread::scope(|scope| {
+            // Spawn a thread to read stderr from ffmpeg
+            let (output_size_rx, ffmpeg_stderr_join_handle) =
+                match self.spawn_ffmpeg_stderr_thread(&mut ffmpeg_stderr, scope) {
+                    Ok(ffmpeg_stderr_thread) => ffmpeg_stderr_thread,
+                    Err(e) => {
+                        // TODO lost scope:
+                        // ffmpeg_child
+                        //     .kill()
+                        //     .expect("able to stop ffmpeg process if something goes wrong");
+                        return Err(e.to_string());
+                    }
+                };
 
-//             // stdin can be manually disabled (uncommon)
-//             stdin: if self.enable_ffmpeg_stdin {
-//                 Stdio::piped()
-//             } else {
-//                 Stdio::null()
-//             },
+            // Block on each line of ffmpeg stderr until receiving the output size
+            let (output_width, output_height) = output_size_rx.recv().map_err(|_| {
+              "ffmpeg exited before sending output size. This is likely due to an invalid input file.".to_string()
+            })?;
+            println!(
+                "[ffmpeg] Parsed output size from logs: {}x{}",
+                output_width, output_height
+            );
 
-//             // stdout is always on
-//             stdout: Stdio::piped(),
-//         }
-//     }
+            // Initialize a buffer
+            const CHANNELS: u32 = 3; // matches in the `-f rgb24` flag to ffmpeg
+            let buf_size = (output_width * output_height * CHANNELS) as usize;
+            let mut buffer = vec![0_u8; buf_size];
+            println!("[ffmpeg.stdout] Allocated buffer of size {}", buf_size);
 
-//     /// Spawns an instance of FFMPEG, listens on stdio channels, and forwards decoded images to the appropriate Runner.
-//     ///
-//     /// The return result indicates the success of creating the Job, but the
-//     /// execution continues in separate threads.
-//     pub fn start_job(&mut self, job_id: String, config: HypetriggerConfig) -> io::Result<()> {
-//         let config_arc = Arc::new(config);
+            // Read from stdout on the current thread, invoking Triggers each frame
+            let mut frame_num = 0;
+            while ffmpeg_stdout.read_exact(&mut buffer).is_ok() {
+                let image = match RgbImage::from_vec(output_width, output_height, buffer.clone()) {
+                    Some(image) => image,
+                    None => {
+                        return Err(
+                            "unable to convert vec to imagebuffer (size mismatch)".to_string()
+                        )
+                    }
+                };
+                let frame = Frame {
+                    image,
+                    frame_num,
+                    timestamp: frame_num as f64 / self.fps as f64,
+                };
+                for trigger in &self.triggers {
+                    trigger.on_frame(&frame);
+                }
+                frame_num += 1;
+            }
+            println!("[ffmpeg.out] Finished reading from stdout");
+            Ok(())
+        }).map_err(Error::from)
+    }
 
-//         // Validate job
-//         if self.jobs.contains_key(&job_id) {
-//             return Err(io::Error::new(
-//                 io::ErrorKind::AlreadyExists,
-//                 format!("job already exists with id {}", job_id),
-//             ));
-//         }
-//         if config_arc.triggers.is_empty() {
-//             return Err(io::Error::new(
-//                 io::ErrorKind::InvalidInput,
-//                 "job contains no triggers".to_string(),
-//             ));
-//         }
+    pub fn spawn_ffmpeg_child(&self) -> Result<Child> {
+        let mut cmd = Command::new(self.ffmpeg_exe.as_str());
+        cmd.arg("-hwaccel")
+            .arg("auto")
+            .arg("-i")
+            .arg(self.input.as_str())
+            .arg("-filter:v")
+            .arg(format!("fps={}", self.fps))
+            .arg("-vsync")
+            .arg("drop")
+            .arg("-f")
+            .arg("rawvideo")
+            .arg("-pix_fmt")
+            .arg("rgb24")
+            .arg("-an")
+            .arg("-y")
+            .arg("pipe:1")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(0x08000000); // this seems Windows-only. Is there a cross-platform solution?
 
-//         // Get runners
-//         let runner_threads_clone = self.runner_threads.clone();
-//         let get_runner_thread: GetRunnerThread = Arc::new(move |name| -> Arc<WorkerThread> {
-//             runner_threads_clone
-//                 .read()
-//                 .expect("able to acquire lock on runner_threads (not poisoned)")
-//                 .get(&name)
-//                 .expect("hashmap contains a runner thread with the specified id")
-//                 .clone()
-//         });
+        // Debug command
+        println!("[debug] ffmpeg command appears below:");
+        println!("{}", command_to_string(&cmd));
 
-//         // Ffmpeg childprocess
-//         let ffmpeg_stdio = self.ffmpeg_stdio_config();
-//         let mut ffmpeg_child = (self.spawn_ffmpeg_childprocess)(
-//             config_arc.clone(),
-//             ffmpeg_stdio,
-//             self.ffmpeg_exe.clone(),
-//             self.debugger.clone(),
-//         )?;
-//         let ffmpeg_stdin = ffmpeg_child.stdin.take();
-//         let ffmpeg_stderr = ffmpeg_child.stderr.take();
-//         let ffmpeg_stdout = match ffmpeg_child.stdout.take() {
-//             Some(stdout) => stdout,
-//             None => {
-//                 return Err(io::Error::new(
-//                     io::ErrorKind::BrokenPipe,
-//                     "ffmpeg child should always have a piped stdout channel",
-//                 ))
-//             }
-//         };
+        cmd.spawn().map_err(Error::from)
+    }
 
-//         // Handler for panic within threads
-//         let ffmpeg_child_arc = Arc::new(Mutex::new(ffmpeg_child));
-//         let ffmpeg_child_clone = ffmpeg_child_arc.clone();
-//         let on_panic: OnPanic = Arc::new(move |error| {
-//             eprintln!("[panic] Panic in thread: {}", error);
-//             eprintln!("killing ffmpeg childprocess...");
-//             let mut child = ffmpeg_child_clone.lock().unwrap();
-//             child.kill().unwrap();
-//             child.wait().unwrap();
-//             eprintln!("[panic] Ffmpeg childprocess killed");
-//         });
+    /// Spawns a thread to handle reading the stderr channel from ffmpeg.
+    ///
+    /// After first spawning, we read the metadata/prelude of the ffmpeg job in
+    /// order to determine the width and height of the output frames. That's
+    /// sent back to the main thread via a channel. After the metadata is
+    /// received, the channel closes, while the stderr handler thread continues
+    /// to run in the background. It automatically stops after ffmpeg exits.
+    pub fn spawn_ffmpeg_stderr_thread<'scope>(
+        &'scope self,
+        ffmpeg_stderr: &'scope mut ChildStderr,
+        scope: &'scope Scope<'scope, '_>, // scope scope scope scope wheeee
+    ) -> Result<(
+        Receiver<(u32, u32)>,
+        ScopedJoinHandle<'scope, core::result::Result<(), String>>,
+    )> {
+        let (output_size_tx, output_size_rx) = channel::<(u32, u32)>();
+        let thread_body = move || {
+            let mut reader = BufReader::new(ffmpeg_stderr);
+            let mut line = String::new();
+            let mut current_section = "";
+            let mut output_size: Option<(u32, u32)> = None;
+            loop {
+                // Rust docs claim this isn't necessary, but the buffer
+                // never gets cleared!
+                line.clear();
 
-//         // Ffmpeg stdout
-//         let ffmpeg_stdout_thread = match (self.spawn_ffmpeg_stdout_thread)(
-//             ffmpeg_stdout,
-//             config_arc.clone(),
-//             self.debugger.clone(),
-//             self.on_ffmpeg_stdout.clone(),
-//             get_runner_thread.clone(),
-//             on_panic.clone(),
-//         ) {
-//             Ok(thread) => thread,
-//             Err(err) => {
-//                 // Clean up ffmpeg childprocess, which will now have nowhere to
-//                 // put its stdout. Panic if this cleanup fails (it was already
-//                 // plan B)
-//                 let mut child = ffmpeg_child_arc.lock().unwrap();
-//                 child
-//                     .kill()
-//                     .expect("ffmpeg process had started normally, so it should be killable");
-//                 child
-//                     .wait()
-//                     .expect("no unknown error while waiting for ffmpeg process to exit");
-//                 return Err(err);
-//             }
-//         };
+                match reader.read_line(&mut line) {
+                    Ok(0) => {
+                        break; // (EOF)
+                    }
+                    Ok(_) => {
+                        // Parse for output size if not already found
+                        if output_size.is_none() {
+                            if line.starts_with("Output #") {
+                                current_section = "Output"; // stringly-typed rather than enum for convenience
+                            } else if current_section == "Output" {
+                                if let Some(size) = parse_ffmpeg_output_size(line.as_str()) {
+                                    output_size = Some(size); // remember this, so we don't check for it anymore
+                                    output_size_tx.send(size).map_err(|e| e.to_string())?;
+                                }
+                            }
+                        }
 
-//         // Ffmpeg stderr
-//         // This one is tricky to unbox, since it's a Result inside an option
-//         // TODO: change this? It's un-ergonomic, and in the future we will
-//         // likely need to require a stderr handler in all cases (for things like
-//         // metadata and ffmpeg error detection).
-//         let ffmpeg_stderr_thread = match (self.spawn_ffmpeg_stderr_thread)(
-//             ffmpeg_stderr.unwrap(),
-//             config_arc.clone(),
-//             self.on_ffmpeg_stderr.clone(),
-//             self.debugger.clone(),
-//             on_panic.clone(),
-//         ) {
-//             Some(result) => match result {
-//                 Ok(thread) => Some(thread),
-//                 Err(err) => {
-//                     // Same thing as if stdout thread fails. In this case, the
-//                     // stdout thread will automatically terminate when the
-//                     // stdout channel closes.
-//                     let mut child = ffmpeg_child_arc.lock().unwrap();
-//                     child
-//                         .kill()
-//                         .expect("ffmpeg process had started normally, so it should be killable");
-//                     child
-//                         .wait()
-//                         .expect("no unknown error while waiting for ffmpeg process to exit");
-//                     ffmpeg_stdout_thread
-//                         .join()
-//                         .expect("ffmpeg stdout thread shouldn't panic, and should be joinable");
-//                     return Err(err);
-//                 }
-//             },
-//             None => None,
-//         };
+                        // Regular callback on every line of stderr
+                        println!("[ffmpeg.err] {}", line.trim_end());
+                        // TODO: add `self.on_ffmpeg_stderr` callback (possible in a scoped thread)
+                    }
+                    Err(e) => {
+                        eprintln!("[ffmpeg.err] Error reading ffmpeg stderr: {}", e);
+                        eprintln!("[ffmpeg.err] Attempting to continue reading next line.");
+                    }
+                }
+            }
 
-//         // Spawn runner threads
-//         // TODO: error handling?
-//         self.spawn_runners_for_config(config_arc.clone(), on_panic.clone());
+            println!("[ffmpeg.err] ffmpeg stderr thread exiting");
+            Ok(())
+        };
 
-//         // Insert job
-//         let job = HypetriggerJob {
-//             config: config_arc,
-//             ffmpeg_child: ffmpeg_child_arc,
-//             ffmpeg_stdin: Mutex::new(ffmpeg_stdin),
-//             ffmpeg_stderr_thread,
-//             ffmpeg_stdout_thread,
-//         };
-//         self.jobs.insert(job_id, job);
+        let join_handle = thread::Builder::new()
+            .name("ffmpeg_stderr".to_string())
+            .spawn_scoped(scope, thread_body)?;
 
-//         Ok(())
-//     }
-
-//     // TODO should return a result type
-//     pub fn stop_job(&mut self, job_id: String) {
-//         let job = self.jobs.remove(&job_id).expect("remove job from hashmap");
-//         let ffmpeg_stdin = job.ffmpeg_stdin.lock().unwrap();
-//         ffmpeg_stdin
-//             .as_ref()
-//             .expect("obtain ffmpeg stdin channel")
-//             .write_all(b"q\n")
-//             .expect("send quit signal");
-
-//         // join threads to block until job is definitely finished
-//         job.ffmpeg_stdout_thread
-//             .join()
-//             .expect("join ffmpeg stdout thread");
-//         if let Some(stderr_thread) = job.ffmpeg_stderr_thread {
-//             stderr_thread.join().expect("join ffmpeg stderr thread");
-//         }
-//     }
-
-//     pub fn stop_all_jobs(&mut self) -> Result<(), String> {
-//         let keys = self.jobs.keys().cloned().collect::<Vec<_>>();
-//         for key in keys {
-//             self.stop_job(key);
-//         }
-//         Ok(())
-//     }
-// }
-
-// pub fn test_builder() {
-//     let _builder = Pipeline::builder().build().unwrap();
-// }
-
-// struct HypetriggerJob {
-//     pub ffmpeg_child: Arc<Mutex<Child>>,
-//     pub ffmpeg_stdin: Mutex<Option<ChildStdin>>,
-//     pub ffmpeg_stderr_thread: Option<JoinHandle<()>>,
-//     pub ffmpeg_stdout_thread: JoinHandle<()>,
-//     pub config: Arc<HypetriggerConfig>,
-// }
-
-// pub type SpawnRunnerThreads = Arc<
-//     dyn (Fn(
-//             &HypetriggerConfig,
-//             &HashMap<String, WorkerThread>,
-//             OnEmit,
-//         ) -> HashMap<String, WorkerThread>)
-//         + Send
-//         + Sync,
-// >;
-
-// /// Spawns the default runners: Tensorflow and Tesseract
-// /// Source is in pipeline.rs rather than runner.rs to hopefully avoid
-// /// unnecessary imports of Tesseract and Tensorflow
-// fn spawn_runner_threads(
-//     config: &HypetriggerConfig,
-//     _runners: &HashMap<String, WorkerThread>,
-//     _on_result: OnEmit,
-// ) -> HashMap<String, WorkerThread> {
-//     let hashmap: HashMap<String, WorkerThread> = HashMap::new();
-//     // hashmap.extend(runners.into_iter());
-//     // TODO !!! IMPORTANT runners.clone()
-//     for trigger in &config.triggers {
-//         if hashmap.contains_key(trigger.get_runner_type().as_str()) {
-//             continue;
-//         }
-//         match trigger.get_runner_type().as_str() {
-//             TENSORFLOW_RUNNER => {
-//                 //   hashmap.insert(
-//                 //     "tensorflow".into(),
-//                 //     spawn_tensorflow_thread(config.clone(), self.on_result),
-//                 // )
-//             }
-//             TESSERACT_RUNNER => {
-//                 // hashmap.insert("tesseract".into(), spawn_tesseract_thread(self.on_result))
-//             }
-//             unknown => panic!("Unknown runner type: {}", unknown),
-//         };
-//     }
-//     hashmap
-// }
+        Ok((output_size_rx, join_handle))
+    }
+}

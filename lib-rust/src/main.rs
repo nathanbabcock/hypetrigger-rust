@@ -4,7 +4,7 @@ use hypetrigger::{
     async_trigger::{AsyncTrigger, TriggerThread},
     error::{Error, Result},
     photon::Crop,
-    pipeline_simple::Hypetrigger,
+    pipeline::Hypetrigger,
     simple_trigger::SimpleTrigger,
     tesseract::{init_tesseract, TesseractTrigger},
 };
