@@ -1,5 +1,3 @@
-use std::cell::RefCell;
-
 use hypetrigger::{
     async_trigger::{AsyncTrigger, TriggerThread},
     error::{Error, Result},
@@ -8,7 +6,6 @@ use hypetrigger::{
     simple_trigger::SimpleTrigger,
     tesseract::{init_tesseract, TesseractTrigger},
 };
-use tesseract::Tesseract;
 
 fn main() -> Result<()> {
     Hypetrigger::new()
@@ -65,7 +62,7 @@ fn main_threaded() -> Result<()> {
         threshold_filter: None,
         callback: None,
     };
-    let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread.clone());
+    let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread);
 
     Hypetrigger::new()
         .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())

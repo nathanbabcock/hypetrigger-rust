@@ -140,6 +140,6 @@ pub fn rgba32_to_rgb24(vec: Vec<u8>) -> Vec<u8> {
 pub fn rgb_to_photon(rgb: &RgbImage) -> PhotonImage {
     let rgb24 = rgb.to_vec();
     let rgb32 = rgb24_to_rgba32(rgb24);
-    let photon_image = PhotonImage::new(rgb32, rgb.width(), rgb.height());
-    photon_image
+    
+    PhotonImage::new(rgb32, rgb.width(), rgb.height())
 }

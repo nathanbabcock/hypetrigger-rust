@@ -138,7 +138,7 @@ impl Hypetrigger {
         // Enter a new scope that will block until ffmpeg_stderr_thread is done
         thread::scope(|scope| {
             // Spawn a thread to read stderr from ffmpeg
-            let (output_size_rx, ffmpeg_stderr_join_handle) =
+            let (output_size_rx, _ffmpeg_stderr_join_handle) =
                 match self.spawn_ffmpeg_stderr_thread(&mut ffmpeg_stderr, scope) {
                     Ok(ffmpeg_stderr_thread) => ffmpeg_stderr_thread,
                     Err(e) => {
