@@ -8,6 +8,7 @@ homepage = "https://hypetrigger.io"
 categories = ["computer-vision", "multimedia", "wasm"]
 keywords = ["ffmpeg", "tensorflow", "tesseract", "gpu", "video"]
 repository = "https://github.com/nathanbabcock/hypetrigger"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
