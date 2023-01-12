@@ -182,9 +182,8 @@ impl Hypetrigger {
                     timestamp: frame_num as f64 / self.fps as f64,
                 };
                 for trigger in &self.triggers {
-                    match trigger.on_frame(&frame) {
-                        Err(e) => eprintln!("Error in trigger: {}", e),
-                        Ok(_) => {},
+                    if let Err(e) = trigger.on_frame(&frame) {
+                        eprintln!("Error in trigger: {}", e);
                     }
                 }
                 frame_num += 1;
@@ -234,10 +233,7 @@ impl Hypetrigger {
         &'scope self,
         ffmpeg_stderr: &'scope mut ChildStderr,
         scope: &'scope Scope<'scope, '_>, // scope scope scope scope wheeee
-    ) -> Result<(
-        Receiver<(u32, u32)>,
-        ScopedJoinHandle<'scope, core::result::Result<(), String>>,
-    )> {
+    ) -> Result<(Receiver<(u32, u32)>, FfmpegStderrJoinHandle<'scope>)> {
         let (output_size_tx, output_size_rx) = channel::<(u32, u32)>();
         let thread_body = move || {
             let mut reader = BufReader::new(ffmpeg_stderr);
@@ -288,3 +284,6 @@ impl Hypetrigger {
         Ok((output_size_rx, join_handle))
     }
 }
+
+pub type FfmpegStderrJoinHandle<'scope> =
+    ScopedJoinHandle<'scope, core::result::Result<(), String>>;

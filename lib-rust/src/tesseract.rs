@@ -14,12 +14,14 @@ use std::{
 };
 use tesseract::Tesseract;
 
+pub type TesseractTriggerCallback = Arc<dyn Fn(&str) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct TesseractTrigger {
     pub tesseract: Arc<Mutex<Option<Tesseract>>>,
     pub crop: Option<Crop>,
     pub threshold_filter: Option<ThresholdFilter>,
-    pub callback: Option<Arc<dyn Fn(&str) + Send + Sync>>,
+    pub callback: Option<TesseractTriggerCallback>,
 }
 
 impl Trigger for TesseractTrigger {
@@ -139,9 +141,12 @@ where
     Y: Into<Option<&'a str>>,
 {
     let current_exe = std::env::current_exe()?;
-    let default_datapath_pathbuf = current_exe.parent().unwrap().join(""); // this fixed something???
-    let default_datapath = default_datapath_pathbuf.as_os_str().to_str().unwrap();
-    let datapath = Into::<Option<&str>>::into(datapath).unwrap_or(default_datapath.as_ref());
+    let default_datapath_pathbuf = current_exe.parent().ok_or(NoneError)?.join(""); // this fixed something???
+    let default_datapath = default_datapath_pathbuf
+        .as_os_str()
+        .to_str()
+        .ok_or(NoneError)?;
+    let datapath = Into::<Option<&str>>::into(datapath).unwrap_or(default_datapath);
     let language = Into::<Option<&str>>::into(language).unwrap_or("eng");
     println!("[tesseract] using datapath {}", datapath);
     println!("[tesseract] using language {}", language);

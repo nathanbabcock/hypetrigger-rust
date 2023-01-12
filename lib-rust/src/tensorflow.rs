@@ -17,11 +17,13 @@ pub const TENSOR_CHANNELS: u64 = 3;
 /// The key in the hashmap of Runners, used to map Triggers to their Runners
 pub const TENSORFLOW_RUNNER: &str = "tensorflow";
 
+pub type TensorflowTriggerCallback = Box<dyn Fn(&Prediction) + Send + Sync>;
+
 pub struct TensorflowTrigger {
     pub crop: Option<Crop>,
     pub bundle: SavedModelBundle,
     pub graph: Graph,
-    pub callback: Option<Box<dyn Fn(&Prediction) + Send + Sync>>,
+    pub callback: Option<TensorflowTriggerCallback>,
 }
 
 impl Trigger for TensorflowTrigger {
@@ -167,8 +169,9 @@ pub fn predict(
 pub fn buffer_to_tensor(buf: &[u8]) -> Tensor<f32> {
     let mut flattened: Vec<f32> = Vec::new();
     let bytes = TENSOR_SIZE * TENSOR_SIZE * TENSOR_CHANNELS;
-    for i in 0..bytes as usize {
-        flattened.push(buf[i] as f32 / 255.0);
+
+    for pixel in buf.iter().take(bytes as usize) {
+        flattened.push(*pixel as f32 / 255.0);
     }
 
     Tensor::new(&[1, TENSOR_SIZE, TENSOR_SIZE, TENSOR_CHANNELS])
