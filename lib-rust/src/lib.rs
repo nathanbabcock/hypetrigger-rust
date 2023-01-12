@@ -13,6 +13,9 @@ pub mod tensorflow;
 #[cfg(feature = "tesseract")]
 pub mod tesseract;
 
+#[cfg(test)]
+mod tests;
+
 pub mod async_trigger;
 pub mod debug;
 pub mod error;

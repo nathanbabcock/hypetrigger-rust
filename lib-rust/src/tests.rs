@@ -1,4 +1,4 @@
-use hypetrigger::{
+use crate::{
     async_trigger::{AsyncTrigger, TriggerThread},
     error::{Error, Result},
     photon::Crop,
@@ -7,9 +7,10 @@ use hypetrigger::{
     tesseract::{init_tesseract, TesseractTrigger},
 };
 
-fn main() -> Result<()> {
+#[test]
+fn simple_trigger() -> Result<()> {
     Hypetrigger::new()
-        .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
+        .test_input()
         .add_trigger(SimpleTrigger::new(|frame| {
             println!(
                 "received frame {}: {}x{}",
@@ -23,9 +24,8 @@ fn main() -> Result<()> {
         .map_err(Error::from_display)
 }
 
-fn _main_tesseract() -> Result<()> {
-    println!("Hello world!");
-
+#[test]
+fn tesseract() -> Result<()> {
     let tesseract = init_tesseract(None, None)?;
     let trigger = TesseractTrigger {
         tesseract,
@@ -40,15 +40,14 @@ fn _main_tesseract() -> Result<()> {
     };
 
     Hypetrigger::new()
-        .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
+        .test_input()
         .add_trigger(trigger)
         .run()
         .map_err(Error::from_display)
 }
 
-fn _main_threaded() -> Result<()> {
-    println!("Hello world!");
-
+#[test]
+fn async_trigger() -> Result<()> {
     let runner_thread = TriggerThread::spawn();
     let tesseract = init_tesseract(None, None)?;
     let base_trigger = TesseractTrigger {
@@ -65,7 +64,7 @@ fn _main_threaded() -> Result<()> {
     let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread);
 
     Hypetrigger::new()
-        .set_input("D:/My Videos Backup/OBS/Road to the 20-Bomb/17.mp4".to_string())
+        .test_input()
         .add_trigger(trigger)
         .run()
         .map_err(Error::from_display)

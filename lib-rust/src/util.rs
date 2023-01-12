@@ -30,9 +30,7 @@ pub fn command_to_string(cmd: &Command) -> String {
 /// Parses a line of ffmpeg stderr output, looking for the video size.
 /// We're looking for a line like this:
 ///
-/// ```
-///   Stream #0:0(und): Video: rawvideo (RGB[24] / 0x18424752), rgb24(pc, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], q=2-31, 99532 kb/s, 2 fps, 2 tbn (default)
-/// ```
+/// `  Stream #0:0(und): Video: rawvideo (RGB[24] / 0x18424752), rgb24(pc, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], q=2-31, 99532 kb/s, 2 fps, 2 tbn (default)`
 pub fn parse_ffmpeg_output_size(text: &str) -> Option<(u32, u32)> {
     lazy_static! {
         static ref REGEX_SIZE: Regex = Regex::new(r"  Stream .* Video: .* (\d+)x(\d+),? ").unwrap();

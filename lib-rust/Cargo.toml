@@ -13,9 +13,9 @@ license = "MIT"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[[bin]]
-name = "hypetrigger-test"
-path = "src/main.rs"
+# [[bin]]
+# name = "hypetrigger-test"
+# path = "src/main.rs"
 
 [features]
 default = ["photon", "tesseract", "tensorflow", "console_error_panic_hook"]

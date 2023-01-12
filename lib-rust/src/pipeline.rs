@@ -26,8 +26,16 @@ pub struct Hypetrigger {
     // Path the the ffmpeg binary or command to use
     pub ffmpeg_exe: String,
 
-    /// Path to input video (or image) for ffmpeg
+    /// Path to input video (or image) for ffmpeg. Corresponds to ffmpeg `-i` arg.
     pub input: String,
+
+    /// Less commonly used, indicates the video format of the input, if it can't
+    /// be inferred from the file extension. Corresponds to ffmpeg `-f` arg.
+    ///
+    /// Use cases:
+    /// - generating test source (`-f lavfi -i testsrc`)
+    /// - certain methods of screen capture (`-f gdigrab`).
+    pub input_format: Option<String>,
 
     /// Framerate to sample the input video at. This can (an should) by much
     /// lower than the input video's native framerate. 2-4 frames per second is
@@ -50,6 +58,7 @@ impl Hypetrigger {
         Self {
             ffmpeg_exe: "ffmpeg".to_string(),
             input: "".to_string(),
+            input_format: None,
             fps: 2,
             triggers: vec![],
         }
@@ -66,6 +75,18 @@ impl Hypetrigger {
     pub fn set_input(&mut self, input: String) -> &mut Self {
         self.input = input;
         self
+    }
+
+    /// Setter for the input vformat for ffmpeg
+    pub fn set_input_format(&mut self, input_format: &str) -> &mut Self {
+        self.input_format = Some(input_format.to_string());
+        self
+    }
+
+    /// Alias for `set_input_format("lavfi")` and `set_input(FFMPEG_TEST_INPUT)`
+    pub fn test_input(&mut self) -> &mut Self {
+        self.set_input_format("lavfi")
+            .set_input(FFMPEG_TEST_INPUT.to_string())
     }
 
     /// Setter for the framerate to sample the input video at.
@@ -195,9 +216,11 @@ impl Hypetrigger {
 
     pub fn spawn_ffmpeg_child(&self) -> Result<Child> {
         let mut cmd = Command::new(self.ffmpeg_exe.as_str());
-        cmd.arg("-hwaccel")
-            .arg("auto")
-            .arg("-i")
+        cmd.arg("-hwaccel").arg("auto");
+        if let Some(input_format) = &self.input_format {
+            cmd.arg("-f").arg(input_format);
+        }
+        cmd.arg("-i")
             .arg(self.input.as_str())
             .arg("-filter:v")
             .arg(format!("fps={}", self.fps))
@@ -287,3 +310,7 @@ impl Hypetrigger {
 
 pub type FfmpegStderrJoinHandle<'scope> =
     ScopedJoinHandle<'scope, core::result::Result<(), String>>;
+
+/// Used with the ffmpeg `-i` argument, or with `.input()` in the Hypetrigger API.
+/// <https://www.bogotobogo.com/FFMpeg/ffmpeg_video_test_patterns_src.php>
+pub const FFMPEG_TEST_INPUT: &str = "testsrc=duration=10:size=1280x720:rate=30";
