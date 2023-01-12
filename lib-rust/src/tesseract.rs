@@ -28,7 +28,7 @@ impl Trigger for TesseractTrigger {
         let image = rgb_to_photon(&frame.image);
 
         // 2. preprocess
-        let filtered = self.preprocess_image(image);
+        let filtered = self.preprocess_image(image)?;
 
         // 3. run ocr
         let text = self.ocr(filtered)?;
@@ -43,12 +43,12 @@ impl Trigger for TesseractTrigger {
 }
 
 impl TesseractTrigger {
-    pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
+    pub fn preprocess_image(&self, mut image: PhotonImage) -> Result<PhotonImage> {
         /// If `true`, pauses execution after each step of image pre-processing.
         const DEBUG: bool = false;
         if DEBUG {
             println!("[tesseract] received frame");
-            debug_photon_image(&image);
+            debug_photon_image(&image)?;
         }
 
         // Crop
@@ -57,7 +57,7 @@ impl TesseractTrigger {
         }
         if DEBUG {
             println!("[tesseract] cropped");
-            debug_photon_image(&image);
+            debug_photon_image(&image)?;
         }
 
         // Minimum size
@@ -65,7 +65,7 @@ impl TesseractTrigger {
         image = ensure_minimum_size(&image, MIN_TESSERACT_IMAGE_SIZE);
         if DEBUG {
             println!("[tesseract] resized");
-            debug_photon_image(&image);
+            debug_photon_image(&image)?;
         }
 
         // Threshold filter
@@ -74,7 +74,7 @@ impl TesseractTrigger {
         }
         if DEBUG {
             println!("[tesseract] filtered");
-            debug_photon_image(&image);
+            debug_photon_image(&image)?;
         }
 
         // Padding
@@ -82,10 +82,10 @@ impl TesseractTrigger {
         image = padding_uniform(&image, MIN_TESSERACT_IMAGE_SIZE, padding_bg);
         if DEBUG {
             println!("[tesseract] padded (done)");
-            debug_photon_image(&image);
+            debug_photon_image(&image)?;
         }
 
-        image
+        Ok(image)
     }
 
     pub fn ocr(&self, image: PhotonImage) -> Result<String> {
@@ -105,7 +105,7 @@ impl TesseractTrigger {
             )?
             .set_source_resolution(96);
         let result = tesseract.get_text()?;
-        mutex_guard.insert(tesseract);
+        let _tesseract = mutex_guard.insert(tesseract);
         Ok(result)
     }
 }

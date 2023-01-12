@@ -52,7 +52,10 @@ impl TriggerThread {
         let (tx, rx) = std::sync::mpsc::sync_channel::<TriggerPacket>(100);
         let join_handle = thread::spawn(move || {
             while let Ok(payload) = rx.recv() {
-                payload.trigger.on_frame(&payload.frame);
+                match payload.trigger.on_frame(&payload.frame) {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Error in async trigger: {}", e),
+                }
             }
         });
         Arc::new(Self { tx, join_handle })

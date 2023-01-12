@@ -23,7 +23,7 @@ fn main() -> Result<()> {
         .map_err(Error::from_display)
 }
 
-fn main_tesseract() -> Result<()> {
+fn _main_tesseract() -> Result<()> {
     println!("Hello world!");
 
     let tesseract = init_tesseract(None, None)?;
@@ -46,7 +46,7 @@ fn main_tesseract() -> Result<()> {
         .map_err(Error::from_display)
 }
 
-fn main_threaded() -> Result<()> {
+fn _main_threaded() -> Result<()> {
     println!("Hello world!");
 
     let runner_thread = TriggerThread::spawn();

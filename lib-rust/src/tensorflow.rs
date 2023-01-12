@@ -30,7 +30,7 @@ impl Trigger for TensorflowTrigger {
         let image = rgb_to_photon(&frame.image);
 
         // 2. preprocess
-        let filtered = self.preprocess_image(image);
+        let filtered = self.preprocess_image(image)?;
 
         // 3. image classification
         let rgba32 = filtered.get_raw_pixels();
@@ -49,12 +49,12 @@ impl Trigger for TensorflowTrigger {
 }
 
 impl TensorflowTrigger {
-    pub fn preprocess_image(&self, mut image: PhotonImage) -> PhotonImage {
+    pub fn preprocess_image(&self, mut image: PhotonImage) -> Result<PhotonImage> {
         /// If `true`, pauses execution after each step of image pre-processing.
         const DEBUG: bool = false;
         if DEBUG {
             println!("[tensorflow] received frame");
-            debug_photon_image(&image);
+            debug_photon_image(&image)?;
         }
 
         if let Some(crop) = &self.crop {
@@ -67,13 +67,13 @@ impl TensorflowTrigger {
 
         if DEBUG {
             println!("[tensorflow] center square crop and resize to 224x224 px");
-            debug_photon_image(&image);
+            debug_photon_image(&image)?;
         }
 
         debug_assert!(image.get_width() == size);
         debug_assert!(image.get_height() == size);
 
-        image
+        Ok(image)
     }
 }
 
@@ -94,7 +94,7 @@ where
 
     // Initialize the session by running a dummy input through the graph.
     let dummy = dummy_tensor();
-    predict(&bundle, &graph, &dummy);
+    predict(&bundle, &graph, &dummy)?;
     println!("[tensorflow] finished test run");
 
     Ok((bundle, graph))
