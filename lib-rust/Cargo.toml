@@ -6,7 +6,7 @@ authors = ["Nathan Babcock <nathan.r.babcock@gmail.com>"]
 description = "GPU-accelerated computer vision pipeline for native and web"
 homepage = "https://hypetrigger.io"
 categories = ["computer-vision", "multimedia", "wasm"]
-keywords = ["ffmpeg", "tensorflow", "tesseract", "photon", "webassembly", "image processing", "computer vision", "gpu"]
+keywords = ["ffmpeg", "tensorflow", "tesseract", "webassembly", "image-processing", "gpu", "video"]
 repository = "https://github.com/nathanbabcock/hypetrigger"
 
 [lib]
