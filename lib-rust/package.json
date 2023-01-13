@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "cargo-watch": "cargo watch -c -w src -x run",
-    "wasm-pack": "wasm-pack build --target web",
+    "wasm-pack": "wasm-pack build --target web -- --no-default-features --features wasm",
     "wasm-watch": "cargo watch -c -w src -s \"npm run wasm-pack -- --dev\""
   },
   "devDependencies": {
