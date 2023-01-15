@@ -1,4 +1,4 @@
-import { initWasm, openImage, preprocessForTesseract, putImageData, Rgb } from 'hypetrigger'
+import { initWasm, open_image, putImageData } from 'hypetrigger'
 
 console.log('Hello from TypeScript!')
 
@@ -12,10 +12,11 @@ const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
 ctx.drawImage(img, 0, 0)
 
 console.time()
-const photonImage = openImage(canvas, ctx)
+const photonImage = open_image(canvas, ctx)
 // threshold(photonImage, 100)
-const newImage = preprocessForTesseract(photonImage, new Rgb(255, 255, 255), 42)
+// const newImage = preprocessForTesseract(photonImage, new Rgb(255, 255, 255), 42)
 // const newImage = threshold_color_distance(photonImage, new Rgb(255, 255, 255), 30)
+const newImage = photonImage
 canvas.width = newImage.get_width()
 canvas.height = newImage.get_height()
 canvas.style.border = '2px dashed black'

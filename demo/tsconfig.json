@@ -16,7 +16,7 @@
     "skipLibCheck": true,
     "baseUrl": "src", // This must be specified if "paths" is.
     "paths": {
-      "hypetrigger": ["../lib-js/src"]
+      "hypetrigger": ["../../lib-js/src"]
     }
   },
   "include": ["src"]
