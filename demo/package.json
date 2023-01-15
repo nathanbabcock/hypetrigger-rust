@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "tesseract.js": "4.0.2",
     "vite": "^3.2.4",
     "vite-tsconfig-paths": "^3.6.0"
   }

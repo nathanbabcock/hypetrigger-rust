@@ -1,7 +1,7 @@
-import { PhotonImage } from '.'
-import Trigger from './trigger'
+import { open_image, PhotonImage } from '.'
+import { Trigger } from './trigger'
 
-export default class Hypetrigger {
+export class Hypetrigger {
   public triggers: Trigger[] = []
   public imageSource: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement
   public isRunningRealtime: boolean = false
@@ -21,7 +21,15 @@ export default class Hypetrigger {
   }
 
   getPhotonImage() {
-    return new PhotonImage(this.imageSource)
+    let photonImage: PhotonImage
+    if (this.imageSource instanceof HTMLCanvasElement) {
+      let canvas = this.imageSource
+      let ctx = this.imageSource.getContext('2d')
+      photonImage = open_image(canvas, ctx)
+      return photonImage
+    } else {
+      throw new Error('Unsupported image source type')
+    }
   }
 
   run() {

@@ -1,25 +1,55 @@
-import { initWasm, open_image, putImageData } from 'hypetrigger'
+import { Hypetrigger, initWasm } from '../../lib-js/src'
+import { initTesseractScheduler, TesseractTrigger } from './../../lib-js/src/tesseract'
 
-console.log('Hello from TypeScript!')
+initWasm()
 
-await initWasm()
-
-const img = document.getElementById('img') as HTMLImageElement
 const canvas = document.getElementById('canvas') as HTMLCanvasElement
-canvas.width = img.width
-canvas.height = img.height
-const ctx = canvas.getContext('2d') as CanvasRenderingContext2D
-ctx.drawImage(img, 0, 0)
+const ctx = canvas.getContext('2d', { willReadFrequently: true })!
+ctx.fillStyle = 'cornflowerblue'
 
-console.time()
-const photonImage = open_image(canvas, ctx)
-// threshold(photonImage, 100)
-// const newImage = preprocessForTesseract(photonImage, new Rgb(255, 255, 255), 42)
-// const newImage = threshold_color_distance(photonImage, new Rgb(255, 255, 255), 30)
-const newImage = photonImage
-canvas.width = newImage.get_width()
-canvas.height = newImage.get_height()
-canvas.style.border = '2px dashed black'
-console.log(newImage.get_width(), newImage.get_height())
-putImageData(canvas, ctx, newImage)
-console.timeEnd()
+const state = {
+  mousedown: false,
+  mouseX: undefined as number | undefined,
+  mouseY: undefined as number | undefined,
+  penSize: 5,
+}
+
+canvas.addEventListener('mousemove', e => {
+  state.mouseX = e.offsetX
+  state.mouseY = e.offsetY
+})
+canvas.addEventListener('touchmove', e => {
+  state.mouseX = e.touches[0].clientX - canvas.offsetLeft
+  state.mouseY = e.touches[0].clientY - canvas.offsetTop
+})
+const startDrawing = (e: Event) => {
+  state.mousedown = true
+  e.preventDefault()
+}
+const stopDrawing = (e: Event) => {
+  state.mousedown = false
+  e.preventDefault()
+}
+canvas.addEventListener('mousedown', startDrawing)
+canvas.addEventListener('mouseup', stopDrawing)
+canvas.addEventListener('mouseout', stopDrawing)
+canvas.addEventListener('touchstart', startDrawing)
+canvas.addEventListener('touchend', stopDrawing)
+canvas.addEventListener('touchcancel', stopDrawing)
+const render = () => requestAnimationFrame(() => {
+  if (state.mousedown && state.mouseX !== undefined && state.mouseY !== undefined) {
+    ctx.moveTo(state.mouseX, state.mouseY)
+    ctx.ellipse(state.mouseX, state.mouseY, state.penSize, state.penSize, 0, 0, 2 * Math.PI)
+    ctx.fill()
+  }
+  render()
+})
+render()
+
+const scheduler = await initTesseractScheduler()
+const trigger = new TesseractTrigger(scheduler)
+new Hypetrigger(canvas)
+  .addTrigger(trigger)
+  .runRealtime()
+const recognizedText = document.getElementById('recognizedText') as HTMLDivElement
+trigger.onText = text => recognizedText.innerText = text

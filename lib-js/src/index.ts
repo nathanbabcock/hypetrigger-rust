@@ -1,4 +1,6 @@
+import { Hypetrigger } from './hypetrigger'
 import init from '../../lib-rust/pkg/hypetrigger'
+export { init as initWasm }
 
 export {
   PhotonImage,
@@ -12,4 +14,6 @@ export {
   padding_uniform,
 } from '../../lib-rust/pkg/hypetrigger'
 
-export { init as initWasm }
+export { Trigger } from './trigger'
+export { Hypetrigger } from './hypetrigger'
+

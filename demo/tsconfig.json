@@ -16,7 +16,9 @@
     "skipLibCheck": true,
     "baseUrl": "src", // This must be specified if "paths" is.
     "paths": {
-      "hypetrigger": ["../../lib-js/src"]
+      "hypetrigger": ["../../lib-js/src"],
+      // Typescript gets confused, thinking 'tesseract.js' is a local source file
+      "tesseract.js": ["node_modules/tesseract.js/src/index.js"]
     }
   },
   "include": ["src"]
