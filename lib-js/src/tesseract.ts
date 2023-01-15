@@ -1,5 +1,17 @@
-import type { PhotonImage } from '..'
+import type { Crop, PhotonImage, ThresholdFilter } from '..'
 import { createScheduler, createWorker, RecognizeResult, Scheduler, Worker } from 'tesseract.js'
+import Tesseract from 'tesseract.js'
+
+export type TesseractTrigger = {
+  crop?: Crop
+  threshold?: ThresholdFilter
+}
+
+export async function runTesseractTrigger(image: PhotonImage, trigger: TesseractTrigger, scheduler: Scheduler): Promise<string> {
+  image = preprocessForTesseract(image)
+  let text = await recognizeText(image, scheduler)
+  return text
+}
 
 export type TesseractOptions = {
   numWorkers: number,
@@ -40,7 +52,7 @@ export async function initTesseractWorker(
   workerParams: Partial<Tesseract.WorkerParams>,
   langs: string,
 ): Promise<Worker> {
-  const worker = createWorker(workerOptions)
+  const worker = await createWorker(workerOptions)
   await worker.load()
   await worker.loadLanguage(langs)
   await worker.initialize(langs)

@@ -8,7 +8,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "tesseract.js": "^2.1.5"
+    "tesseract.js": "^4.0.2"
   },
   "author": "",
   "license": "ISC"

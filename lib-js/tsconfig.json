@@ -2,9 +2,11 @@
   "compilerOptions": {
     "baseUrl": "src", // This must be specified if "paths" is.
     "paths": {
-      // Not used because Typescript has trouble following a chain of paths.
-      "hypetrigger-wasm": ["../../lib-rust/pkg/hypetrigger"]
+      // Typescript gets confused, thinking 'tesseract.js' is a local source file
+      "tesseract.js": ["node_modules/tesseract.js/src/index.js"]
     },
+    "lib": ["esnext", "dom"],
+    "esModuleInterop": true,
     "outDir": "dist"
   }
 }
