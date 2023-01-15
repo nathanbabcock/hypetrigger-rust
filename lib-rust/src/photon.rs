@@ -8,10 +8,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::threshold::threshold_color_distance_rgba;
 
-pub trait ImageTransform {
-    fn apply(&self, image: PhotonImage) -> PhotonImage;
-}
-
 /// A threshold function based on perceptual color distance
 #[wasm_bindgen]
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
@@ -22,8 +18,8 @@ pub struct ThresholdFilter {
     pub threshold: u8,
 }
 
-impl ImageTransform for ThresholdFilter {
-    fn apply(&self, image: PhotonImage) -> PhotonImage {
+impl ThresholdFilter {
+    pub fn apply(&self, image: PhotonImage) -> PhotonImage {
         let color = Rgb::new(self.r, self.g, self.b);
         let raw_pixels =
             threshold_color_distance_rgba(image.get_raw_pixels(), &color, self.threshold as f64);
@@ -40,8 +36,8 @@ pub struct Crop {
     pub height_percent: f64,
 }
 
-impl ImageTransform for Crop {
-    fn apply(&self, mut image: PhotonImage) -> PhotonImage {
+impl Crop {
+    pub fn apply(&self, mut image: PhotonImage) -> PhotonImage {
         let width = image.get_width() as f64;
         let height = image.get_height() as f64;
         let x1 = (width * (self.left_percent / 100.0)) as u32;
@@ -140,6 +136,6 @@ pub fn rgba32_to_rgb24(vec: Vec<u8>) -> Vec<u8> {
 pub fn rgb_to_photon(rgb: &RgbImage) -> PhotonImage {
     let rgb24 = rgb.to_vec();
     let rgb32 = rgb24_to_rgba32(rgb24);
-    
+
     PhotonImage::new(rgb32, rgb.width(), rgb.height())
 }

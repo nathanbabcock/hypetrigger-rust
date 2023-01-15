@@ -1,7 +1,7 @@
 use crate::{
     debug::debug_photon_image,
     error::Result,
-    photon::{ensure_size, ensure_square, rgb_to_photon, rgba32_to_rgb24, Crop, ImageTransform},
+    photon::{ensure_size, ensure_square, rgb_to_photon, rgba32_to_rgb24, Crop},
     trigger::{Frame, Trigger},
 };
 use photon_rs::PhotonImage;

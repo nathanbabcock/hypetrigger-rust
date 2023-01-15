@@ -1,6 +1,5 @@
 use crate::debug::debug_photon_image;
 use crate::error::{NoneError, Result};
-use crate::photon::ImageTransform;
 use crate::photon::{ensure_minimum_size, rgb_to_photon, Crop, ThresholdFilter};
 use crate::trigger::{Frame, Trigger};
 use photon_rs::transform::padding_uniform;
