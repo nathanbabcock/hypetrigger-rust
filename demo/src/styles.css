@@ -1,0 +1,15 @@
+* {
+  background: #242424;
+  color: rgb(232, 232, 232);
+}
+
+#container {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+}
+
+#canvas {
+  border: 1rem solid rgb(124, 124, 124);
+  border-radius: 1rem;
+}

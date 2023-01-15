@@ -3,17 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="vite.svg" />
+    <link rel="stylesheet" href="src/styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hypetrigger WASM Demo</title>
   </head>
   <body>
-    <canvas
-      id="canvas"
-      width="500"
-      height="500"
-      style="border: 1px solid black"
-    ></canvas>
-    <div id="recognizedText"></div>
+    <div id="container">
+      <canvas id="canvas" width="500" height="500"></canvas>
+      <div id="right-col">
+        <div id="welcome">
+          <h1>👈 Say Hello to Hypetrigger.</h1>
+          <p>
+            Draw words on the canvas to the left to test how well Hypetrigger
+            can recognize text in realtime.
+          </p>
+        </div>
+        <div id="recognizedText">
+          <span id="your-label">You wrote:</span>
+          <code id="your-text">asdf</code>
+        </div>
+        <div id="response">
+          <code id="hypetrigger-msg">Hello, nice to meet you!</code>
+          <span id="hypetrigger-label">- Hypetrigger</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="src/index.ts"></script>
   </body>
 </html>
