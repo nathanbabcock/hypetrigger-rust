@@ -1,4 +1,4 @@
-import { Crop, PhotonImage, ThresholdFilter } from '..'
+import { Crop, ensure_minimum_size, padding_uniform, PhotonImage, Rgba, ThresholdFilter } from '..'
 import { createScheduler, createWorker, RecognizeResult, Scheduler, Worker } from 'tesseract.js'
 import Tesseract from 'tesseract.js'
 import Trigger from './trigger'
@@ -11,6 +11,9 @@ export class TesseractTrigger extends Trigger {
 
   preprocess(image: PhotonImage): PhotonImage {
     if (this.crop) image = this.crop.apply(image)
+    ensure_minimum_size(image, 32)
+    if (this.threshold) image = this.threshold.apply(image)
+    image = padding_uniform(image, 32, new Rgba(255, 255, 255, 255))
     return image
   }
 
