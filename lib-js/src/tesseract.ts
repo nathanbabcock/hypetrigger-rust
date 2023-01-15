@@ -1,16 +1,18 @@
-import type { Crop, PhotonImage, ThresholdFilter } from '..'
+import { Crop, PhotonImage, preprocessForTesseract, ThresholdFilter } from '..'
 import { createScheduler, createWorker, RecognizeResult, Scheduler, Worker } from 'tesseract.js'
 import Tesseract from 'tesseract.js'
+import Trigger from './trigger'
 
-export type TesseractTrigger = {
+export class TesseractTrigger extends Trigger {
   crop?: Crop
   threshold?: ThresholdFilter
-}
+  scheduler: Scheduler
 
-export async function runTesseractTrigger(image: PhotonImage, trigger: TesseractTrigger, scheduler: Scheduler): Promise<string> {
-  image = preprocessForTesseract(image)
-  let text = await recognizeText(image, scheduler)
-  return text
+  async run(image: PhotonImage) {
+    image = preprocessForTesseract(image, this.crop, this.threshold)
+    let text = await recognizeText(image, this.scheduler)
+    return text
+  }
 }
 
 export type TesseractOptions = {
