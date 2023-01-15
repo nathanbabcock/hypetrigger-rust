@@ -7,11 +7,12 @@ export class TesseractTrigger extends Trigger {
   crop?: Crop
   threshold?: ThresholdFilter
   scheduler: Scheduler
+  onText?: (text: string) => void
 
   async run(image: PhotonImage) {
     image = preprocessForTesseract(image, this.crop, this.threshold)
     let text = await recognizeText(image, this.scheduler)
-    return text
+    this.onText?.(text)
   }
 }
 

@@ -68,7 +68,20 @@ Also install **`libclang`** included in the [latest LLVM release](https://github
 
 Current version: <https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/LLVM-14.0.6-win64.exe>
 
-Useful links:
+#### Useful links:
 
 - <https://github.com/charlesw/tesseract/wiki/Compiling-Tesseract-and-Libleptonica-(using-vcpkg)>
 - <https://sunnysab-cn.translate.goog/2020/10/06/Use-Tesseract-To-Identify-Captchas-In-Rust/?_x_tr_sl=zh-CN&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=sc>
+
+### `wasm-pack`
+
+```sh
+cargo install wasm-pack
+```
+
+If you get OpenSSL/Perl errors like this:
+
+> This perl implementation doesn't produce Windows like paths
+
+Try running once from windows `cmd.exe` instead of VSCode integrated terminal
+and/or git bash.

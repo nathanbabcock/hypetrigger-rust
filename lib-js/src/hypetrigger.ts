@@ -27,6 +27,7 @@ export default class Hypetrigger {
   run() {
     for (const trigger of this.triggers)
       trigger.run(this.getPhotonImage())
+    return this
   }
 
   runRealtime() {
@@ -36,6 +37,7 @@ export default class Hypetrigger {
       this.run()
       requestAnimationFrame(callback)
     }
-    callback()
+    requestAnimationFrame(callback)
+    return this
   }
 }
