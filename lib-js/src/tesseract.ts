@@ -1,4 +1,4 @@
-import { Crop, PhotonImage, preprocessForTesseract, ThresholdFilter } from '..'
+import { Crop, PhotonImage, ThresholdFilter } from '..'
 import { createScheduler, createWorker, RecognizeResult, Scheduler, Worker } from 'tesseract.js'
 import Tesseract from 'tesseract.js'
 import Trigger from './trigger'
@@ -9,8 +9,13 @@ export class TesseractTrigger extends Trigger {
   scheduler: Scheduler
   onText?: (text: string) => void
 
+  preprocess(image: PhotonImage): PhotonImage {
+    if (this.crop) image = this.crop.apply(image)
+    return image
+  }
+
   async run(image: PhotonImage) {
-    image = preprocessForTesseract(image, this.crop, this.threshold)
+    image = this.preprocess(image)
     let text = await recognizeText(image, this.scheduler)
     this.onText?.(text)
   }

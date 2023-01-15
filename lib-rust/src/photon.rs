@@ -18,6 +18,7 @@ pub struct ThresholdFilter {
     pub threshold: u8,
 }
 
+#[wasm_bindgen]
 impl ThresholdFilter {
     pub fn apply(&self, image: PhotonImage) -> PhotonImage {
         let color = Rgb::new(self.r, self.g, self.b);
@@ -36,6 +37,7 @@ pub struct Crop {
     pub height_percent: f64,
 }
 
+#[wasm_bindgen]
 impl Crop {
     pub fn apply(&self, mut image: PhotonImage) -> PhotonImage {
         let width = image.get_width() as f64;
