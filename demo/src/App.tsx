@@ -19,14 +19,15 @@ const greetings = [
 
 export default function App() {
   let canvas: HTMLCanvasElement | undefined
+  let ctx: CanvasRenderingContext2D | undefined
   let hypetrigger: Hypetrigger | undefined
-  const ctx = () => canvas?.getContext('2d', { willReadFrequently: true })
 
   const [mousedown, setMousedown] = createSignal(false)
   const [mousePos, setMousePos] = createSignal<
     { x: number; y: number } | undefined
   >()
   const [penSize, _setPenSize] = createSignal(5)
+  const [dirty, setDirty] = createSignal(false)
 
   const [recognizedText, setRecognizedText] = createSignal<
     { text: string; timeMS: number } | undefined
@@ -59,10 +60,11 @@ export default function App() {
 
   const detectText = debounce(() => hypetrigger?.run(), 100)
   const paint = () => {
-    if (!ctx()) return
-    ctx().fillStyle = 'cornflowerblue'
-    ctx().moveTo(mousePos().x, mousePos().y)
-    ctx().ellipse(
+    if (!ctx) return
+    ctx.fillStyle = 'cornflowerblue'
+    ctx.beginPath()
+    ctx.moveTo(mousePos().x, mousePos().y)
+    ctx.ellipse(
       mousePos().x,
       mousePos().y,
       penSize(),
@@ -71,8 +73,16 @@ export default function App() {
       0,
       2 * Math.PI
     )
-    ctx().fill()
+    ctx.fill()
+    ctx.closePath()
+    setDirty(true)
     detectText()
+  }
+
+  const clearCanvas = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    setDirty(false)
+    setRecognizedText(undefined)
   }
 
   const render = () =>
@@ -82,6 +92,7 @@ export default function App() {
     })
 
   const init = async () => {
+    ctx = canvas.getContext('2d')
     await initWasm()
     const scheduler = await initTesseractScheduler({ numWorkers: 1 })
     const trigger = new TesseractTrigger(scheduler)
@@ -89,6 +100,7 @@ export default function App() {
     trigger.onText = (text, timeMS) =>
       setRecognizedText({ text, timeMS: Math.round(timeMS) })
     console.log('Ready.')
+    detectText()
   }
 
   createEffect(() => {
@@ -131,7 +143,7 @@ export default function App() {
             can recognize text in realtime.
           </p>
         </div>
-        <div id="your-wrapper" class={!recognizedText() ? 'hidden' : ''}>
+        <div id="your-wrapper" class={!recognizedText()?.text ? 'hidden' : ''}>
           <span id="your-label">You wrote:</span>
           <code id="your-text">{recognizedText()?.text}</code>
           <span
@@ -145,6 +157,7 @@ export default function App() {
           <code id="response-text">{responseText()}</code>
           <span id="response-label">- Hypetrigger</span>
         </div>
+        {dirty() && <button onClick={clearCanvas}>Clear Canvas</button>}
       </div>
     </>
   )
