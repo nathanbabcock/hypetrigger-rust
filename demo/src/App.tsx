@@ -1,23 +1,38 @@
-import { createEffect, createMemo, createSignal } from 'solid-js'
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
 import { Hypetrigger, initWasm } from '../../lib-js/src'
 import {
   initTesseractScheduler,
   TesseractTrigger,
 } from './../../lib-js/src/tesseract'
 
+const greetings = [
+  'hey',
+  'hi',
+  'hello',
+  'yo',
+  'sup',
+  'howdy',
+  'hola',
+  'bonjour',
+]
+
 export default function App() {
   let canvas: HTMLCanvasElement | undefined
+  let hypetrigger: Hypetrigger | undefined
   const ctx = () => canvas?.getContext('2d', { willReadFrequently: true })
 
   const [mousedown, setMousedown] = createSignal(false)
   const [mousePos, setMousePos] = createSignal<
     { x: number; y: number } | undefined
   >()
-  const [penSize, setPenSize] = createSignal(5)
+  const [penSize, _setPenSize] = createSignal(5)
 
   const [yourText, setYourText] = createSignal<string | undefined>()
   const responseText = () =>
-    yourText()?.toLowerCase().includes('hello')
+    greetings.some(
+      greeting =>
+        yourText()?.toLowerCase().includes(greeting.toLowerCase()) ?? false
+    )
       ? 'Hello to you too!'
       : undefined
 
@@ -58,7 +73,7 @@ export default function App() {
     await initWasm()
     const scheduler = await initTesseractScheduler({ numWorkers: 1 })
     const trigger = new TesseractTrigger(scheduler)
-    new Hypetrigger(canvas).addTrigger(trigger).runRealtime()
+    hypetrigger = new Hypetrigger(canvas).addTrigger(trigger).runRealtime()
     trigger.onText = text => setYourText(text)
   }
 
@@ -68,6 +83,10 @@ export default function App() {
     render()
   })
 
+  onCleanup(() => {
+    console.log('Cleaning up...')
+    if (hypetrigger) hypetrigger.isRunningRealtime = false
+  })
   return (
     <>
       <canvas
