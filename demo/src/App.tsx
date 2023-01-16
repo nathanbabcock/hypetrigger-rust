@@ -1,3 +1,4 @@
+import { debounce } from '@solid-primitives/scheduled'
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
 import { Hypetrigger, initWasm } from '../../lib-js/src'
 import {
@@ -40,7 +41,10 @@ export default function App() {
       : undefined
 
   createEffect(() =>
-    console.log({ yourText: recognizedText(), responseText: responseText() })
+    console.log({
+      yourText: recognizedText()?.text,
+      responseText: responseText(),
+    })
   )
 
   const startDrawing = (e: Event) => {
@@ -53,22 +57,27 @@ export default function App() {
     e.preventDefault()
   }
 
+  const detectText = debounce(() => hypetrigger?.run(), 100)
+  const paint = () => {
+    if (!ctx()) return
+    ctx().fillStyle = 'cornflowerblue'
+    ctx().moveTo(mousePos().x, mousePos().y)
+    ctx().ellipse(
+      mousePos().x,
+      mousePos().y,
+      penSize(),
+      penSize(),
+      0,
+      0,
+      2 * Math.PI
+    )
+    ctx().fill()
+    detectText()
+  }
+
   const render = () =>
     requestAnimationFrame(() => {
-      if (mousedown() && mousePos()) {
-        ctx().fillStyle = 'cornflowerblue'
-        ctx().moveTo(mousePos().x, mousePos().y)
-        ctx().ellipse(
-          mousePos().x,
-          mousePos().y,
-          penSize(),
-          penSize(),
-          0,
-          0,
-          2 * Math.PI
-        )
-        ctx().fill()
-      }
+      if (mousedown() && mousePos()) paint()
       render()
     })
 
@@ -76,8 +85,10 @@ export default function App() {
     await initWasm()
     const scheduler = await initTesseractScheduler({ numWorkers: 1 })
     const trigger = new TesseractTrigger(scheduler)
-    hypetrigger = new Hypetrigger(canvas).addTrigger(trigger).runRealtime()
-    trigger.onText = (text, timeMS) => setRecognizedText({ text, timeMS })
+    hypetrigger = new Hypetrigger(canvas).addTrigger(trigger)
+    trigger.onText = (text, timeMS) =>
+      setRecognizedText({ text, timeMS: Math.round(timeMS) })
+    console.log('Ready.')
   }
 
   createEffect(() => {
@@ -123,7 +134,12 @@ export default function App() {
         <div id="your-wrapper" class={!recognizedText() ? 'hidden' : ''}>
           <span id="your-label">You wrote:</span>
           <code id="your-text">{recognizedText()?.text}</code>
-          {/* <span id="your-ms">{recognizedText()?.timeMS}ms</span> */}
+          <span
+            id="your-ms"
+            title="the time it took to recognize the text in your drawing"
+          >
+            {recognizedText()?.timeMS}ms
+          </span>
         </div>
         <div id="response-wrapper" class={!responseText() ? 'hidden' : ''}>
           <code id="response-text">{responseText()}</code>
