@@ -13,3 +13,7 @@
   border: 1rem solid rgb(124, 124, 124);
   border-radius: 1rem;
 }
+
+.hidden {
+  display: none;
+}
