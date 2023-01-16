@@ -85,7 +85,7 @@ export default function App() {
 
   onCleanup(() => {
     console.log('Cleaning up...')
-    if (hypetrigger) hypetrigger.isRunningRealtime = false
+    hypetrigger?.stop()
   })
   return (
     <>

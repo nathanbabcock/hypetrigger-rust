@@ -32,12 +32,15 @@ export class Hypetrigger {
     }
   }
 
+  /** Run all triggers on the given input source (once) */
   run() {
     for (const trigger of this.triggers)
       trigger.run(this.getPhotonImage())
     return this
   }
 
+  /** Continuously run all triggers on the given input source. Call `stop()`
+   * when this is no longer needed. */
   runRealtime() {
     this.isRunningRealtime = true
     const callback = () => {
@@ -46,6 +49,12 @@ export class Hypetrigger {
       requestAnimationFrame(callback)
     }
     requestAnimationFrame(callback)
+    return this
+  }
+
+  /** Stop running realtime, if applicable */
+  stop() {
+    this.isRunningRealtime = false
     return this
   }
 }
