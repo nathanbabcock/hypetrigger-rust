@@ -4,6 +4,7 @@ use crate::{
     util::{command_to_string, parse_ffmpeg_output_size},
 };
 use image::RgbImage;
+use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::{
     io::BufRead,
@@ -314,3 +315,10 @@ pub type FfmpegStderrJoinHandle<'scope> =
 /// Used with the ffmpeg `-i` argument, or with `.input()` in the Hypetrigger API.
 /// <https://www.bogotobogo.com/FFMpeg/ffmpeg_video_test_patterns_src.php>
 pub const FFMPEG_TEST_INPUT: &str = "testsrc=duration=10:size=1280x720:rate=30";
+
+/// Sends a `q` to the ffmpeg process over stdin, which tells it gracefully exit.
+/// You could also call `kill()` on the `Child` process instance of ffmpeg to stop it
+/// more abruptly.
+pub fn stop_ffmpeg(stdin: &mut ChildStdin) -> Result<()> {
+    stdin.write_all(b"q\n").map_err(Error::from)
+}
