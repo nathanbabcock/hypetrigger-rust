@@ -1,25 +1,19 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "useDefineForClassFields": true,
     "module": "ESNext",
-    "lib": ["ESNext", "DOM"],
-    "moduleResolution": "Node",
-    "strict": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "types": ["vite/client"],
     "noEmit": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "skipLibCheck": true,
-    "baseUrl": "src", // This must be specified if "paths" is.
+    "isolatedModules": true,
     "paths": {
-      "hypetrigger": ["../../lib-js/src"],
+      // "hypetrigger": ["../../lib-js/src"],
       // Typescript gets confused, thinking 'tesseract.js' is a local source file
-      "tesseract.js": ["node_modules/tesseract.js/src/index.js"]
+      "tesseract.js": ["./node_modules/tesseract.js/src/index.js"]
     }
-  },
-  "include": ["src"]
+  }
 }

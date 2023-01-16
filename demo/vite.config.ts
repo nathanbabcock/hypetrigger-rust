@@ -1,12 +1,12 @@
 import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
+import solidPlugin from 'vite-plugin-solid'
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
-  // build: {
-  //   target: 'esnext',
-  //   polyfillDynamicImport: false,
-  // },
+  plugins: [tsconfigPaths(), solidPlugin()],
+  build: {
+    target: 'esnext',
+  },
   server: {
     open: true,
     fs: {
