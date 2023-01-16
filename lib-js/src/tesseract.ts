@@ -7,7 +7,7 @@ export class TesseractTrigger extends Trigger {
   public crop?: Crop
   public threshold?: ThresholdFilter
   public scheduler: Scheduler
-  public onText?: (text: string) => void
+  public onText?: (text: string, timeMS: number) => void
   private internalCanvas: HTMLCanvasElement = document.createElement('canvas')
 
   preprocess(image: PhotonImage): PhotonImage {
@@ -28,9 +28,10 @@ export class TesseractTrigger extends Trigger {
   }
 
   async run(image: PhotonImage) {
+    let start = performance.now()
     image = this.preprocess(image)
     let text = await this.recognizeText(image)
-    this.onText?.(text)
+    this.onText?.(text, performance.now() - start)
   }
 
   constructor(scheduler: Scheduler) {

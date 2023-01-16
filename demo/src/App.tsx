@@ -27,17 +27,20 @@ export default function App() {
   >()
   const [penSize, _setPenSize] = createSignal(5)
 
-  const [yourText, setYourText] = createSignal<string | undefined>()
+  const [recognizedText, setRecognizedText] = createSignal<
+    { text: string; timeMS: number } | undefined
+  >()
   const responseText = () =>
     greetings.some(
       greeting =>
-        yourText()?.toLowerCase().includes(greeting.toLowerCase()) ?? false
+        recognizedText()?.text.toLowerCase().includes(greeting.toLowerCase()) ??
+        false
     )
       ? 'Hello to you too!'
       : undefined
 
   createEffect(() =>
-    console.log({ yourText: yourText(), responseText: responseText() })
+    console.log({ yourText: recognizedText(), responseText: responseText() })
   )
 
   const startDrawing = (e: Event) => {
@@ -74,11 +77,12 @@ export default function App() {
     const scheduler = await initTesseractScheduler({ numWorkers: 1 })
     const trigger = new TesseractTrigger(scheduler)
     hypetrigger = new Hypetrigger(canvas).addTrigger(trigger).runRealtime()
-    trigger.onText = text => setYourText(text)
+    trigger.onText = (text, timeMS) => setRecognizedText({ text, timeMS })
   }
 
   createEffect(() => {
     if (!canvas) return
+    console.log('Initializing...')
     init()
     render()
   })
@@ -116,9 +120,10 @@ export default function App() {
             can recognize text in realtime.
           </p>
         </div>
-        <div id="your-wrapper" class={!yourText() ? 'hidden' : ''}>
+        <div id="your-wrapper" class={!recognizedText() ? 'hidden' : ''}>
           <span id="your-label">You wrote:</span>
-          <code id="your-text">{yourText()}</code>
+          <code id="your-text">{recognizedText()?.text}</code>
+          {/* <span id="your-ms">{recognizedText()?.timeMS}ms</span> */}
         </div>
         <div id="response-wrapper" class={!responseText() ? 'hidden' : ''}>
           <code id="response-text">{responseText()}</code>
