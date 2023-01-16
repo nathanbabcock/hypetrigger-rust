@@ -51,6 +51,23 @@ impl Trigger for TensorflowTrigger {
 }
 
 impl TensorflowTrigger {
+    pub fn new<P>(
+        model_dir: P,
+        crop: Option<Crop>,
+        callback: Option<TensorflowTriggerCallback>,
+    ) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let (bundle, graph) = load_tensorflow_model(model_dir)?;
+        Ok(Self {
+            bundle,
+            graph,
+            crop,
+            callback,
+        })
+    }
+
     pub fn preprocess_image(&self, mut image: PhotonImage) -> Result<PhotonImage> {
         /// If `true`, pauses execution after each step of image pre-processing.
         const DEBUG: bool = false;
