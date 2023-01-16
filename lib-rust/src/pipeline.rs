@@ -105,6 +105,14 @@ impl Hypetrigger {
         self
     }
 
+    /// Add a dynamic array slice of Triggers
+    pub fn add_triggers(&mut self, triggers: &[Arc<dyn Trigger>]) -> &mut Self {
+        for trigger in triggers {
+            self.triggers.push(trigger.clone());
+        }
+        self
+    }
+
     // --- Behavior ---
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
     pub fn run(&mut self) -> Result<()> {
