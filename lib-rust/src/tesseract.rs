@@ -13,7 +13,14 @@ use std::{
 };
 use tesseract::Tesseract;
 
-pub type TesseractTriggerCallback = Arc<dyn Fn(&str) + Send + Sync>;
+pub type TesseractTriggerCallback = Arc<dyn Fn(TesseractResult) + Send + Sync>;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TesseractResult {
+    pub text: String,
+    pub timestamp: f64,
+    pub frame_num: u64,
+}
 
 #[derive(Clone)]
 pub struct TesseractTrigger {
@@ -36,7 +43,12 @@ impl Trigger for TesseractTrigger {
 
         // 4. callback
         if let Some(callback) = &self.callback {
-            callback(text.as_str());
+            let result = TesseractResult {
+                text,
+                timestamp: frame.timestamp,
+                frame_num: frame.frame_num,
+            };
+            callback(result);
         }
 
         Ok(())
