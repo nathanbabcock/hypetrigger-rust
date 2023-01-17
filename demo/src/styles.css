@@ -44,7 +44,7 @@ body {
 
 p {
   margin: 0;
-  text-align: center;
+  /* text-align: center; */
 }
 
 #your-text {
