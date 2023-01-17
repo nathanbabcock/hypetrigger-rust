@@ -4,7 +4,7 @@ import { Trigger } from './trigger'
 export class Hypetrigger {
   public triggers: Trigger[] = []
   public imageSource: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement
-  public isRunningRealtime: boolean = false
+  public isRunningOnInterval: boolean = false
   timeout: number = 0
 
   constructor(imageSource: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement) {
@@ -47,22 +47,27 @@ export class Hypetrigger {
     return this
   }
 
-  /** Continuously run all triggers on the given input source. Call `stop()`
-   * when this is no longer needed. */
-  runRealtime() {
-    this.isRunningRealtime = true
+  /**
+   * Continuously run all triggers on the given input source.
+   * 
+   * Despite the name, it does not use `setInterval`; instead it recursively
+   * calls `setTimeout` with a small delay. This works more reliably than
+   * `requestAnimationFrame`, which can overload the browser's memory if it runs fast enough.
+   */
+  runOnInterval(intervalMS = 100) {
+    this.isRunningOnInterval = true
     const callback = () => {
-      if (!this.isRunningRealtime) return
+      if (!this.isRunningOnInterval) return
       this.run()
-      requestAnimationFrame(callback)
+      setTimeout(callback, intervalMS)
     }
-    requestAnimationFrame(callback)
+    callback()
     return this
   }
 
   /** Stop running realtime, if applicable */
   stop() {
-    this.isRunningRealtime = false
+    this.isRunningOnInterval = false
     return this
   }
 }
