@@ -5,6 +5,7 @@ export class Hypetrigger {
   public triggers: Trigger[] = []
   public imageSource: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement
   public isRunningRealtime: boolean = false
+  timeout: number = 0
 
   constructor(imageSource: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement) {
     return this.setImageSource(imageSource)
@@ -36,6 +37,13 @@ export class Hypetrigger {
   run() {
     for (const trigger of this.triggers)
       trigger.run(this.getPhotonImage())
+    return this
+  }
+
+  /** Run all triggers after `timeoutMS`. Calling this method again resets the timer. */
+  runDebounced(timeoutMS = 100) {
+    clearTimeout(this.timeout)
+    this.timeout = setTimeout(this.run.bind(this), timeoutMS)
     return this
   }
 

@@ -9,7 +9,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@solid-primitives/scheduled": "^1.2.0",
     "solid-js": "1.6.9"
   },
   "devDependencies": {

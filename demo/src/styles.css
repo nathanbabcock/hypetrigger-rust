@@ -12,10 +12,10 @@ body {
   font-family: var(--font);
 }
 
-.highlight {
-  /* background-color: rgba(100, 148, 237, 50%);
-  color: white; */
-}
+/* .highlight {
+  background-color: rgba(100, 148, 237, 50%);
+  color: white;
+} */
 
 #container {
   display: flex;
@@ -26,7 +26,7 @@ body {
 #canvas {
   border: 1rem solid rgba(255, 255, 255, 10%);
   border-radius: 1rem;
-  background-image: url('../public/bullet-journal.svg');
+  background-image: url('/bullet-journal.svg');
   background-repeat: repeat;
   background-size: 3.5rem;
 }

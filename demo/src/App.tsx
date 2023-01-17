@@ -1,5 +1,4 @@
-import { debounce } from '@solid-primitives/scheduled'
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
+import { createEffect, createSignal, onCleanup } from 'solid-js'
 import { Hypetrigger, initWasm } from '../../lib-js/src'
 import {
   initTesseractScheduler,
@@ -58,7 +57,6 @@ export default function App() {
     e.preventDefault()
   }
 
-  const detectText = debounce(() => hypetrigger?.run(), 100)
   const paint = () => {
     if (!ctx) return
     ctx.fillStyle = 'cornflowerblue'
@@ -76,7 +74,7 @@ export default function App() {
     ctx.fill()
     ctx.closePath()
     setDirty(true)
-    detectText()
+    hypetrigger?.runDebounced(100)
   }
 
   const clearCanvas = () => {
@@ -100,7 +98,7 @@ export default function App() {
     trigger.onText = (text, timeMS) =>
       setRecognizedText({ text: text.trim(), timeMS: Math.round(timeMS) })
     console.log('Ready.')
-    detectText()
+    hypetrigger?.runDebounced(100)
   }
 
   createEffect(() => {
