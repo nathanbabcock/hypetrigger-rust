@@ -139,9 +139,13 @@ export default function App() {
         <div id="welcome">
           <h1>👈 Say Hello</h1>
           <p>
-            Draw words on the canvas to the left
-            <br />
-            to test how well Hypetrigger can recognize text in realtime.
+            <mark
+              class={!recognizedText()?.text && !dirty() ? 'highlight' : ''}
+            >
+              Draw words on the canvas to the left
+              <br />
+              to test how well Hypetrigger can recognize text in realtime.
+            </mark>
           </p>
         </div>
         <div id="your-wrapper" class={!recognizedText()?.text ? 'hidden' : ''}>

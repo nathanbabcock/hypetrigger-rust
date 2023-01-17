@@ -12,6 +12,11 @@ body {
   font-family: var(--font);
 }
 
+.highlight {
+  /* background-color: rgba(100, 148, 237, 50%);
+  color: white; */
+}
+
 #container {
   display: flex;
   flex-direction: row;
@@ -19,8 +24,11 @@ body {
 }
 
 #canvas {
-  border: 1rem solid rgb(124, 124, 124);
+  border: 1rem solid rgba(255, 255, 255, 10%);
   border-radius: 1rem;
+  background-image: url('../public/bullet-journal.svg');
+  background-repeat: repeat;
+  background-size: 3.5rem;
 }
 
 .hidden {
@@ -36,6 +44,7 @@ body {
 
 p {
   margin: 0;
+  text-align: center;
 }
 
 #your-text {
