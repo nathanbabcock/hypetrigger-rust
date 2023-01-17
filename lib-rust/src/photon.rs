@@ -43,8 +43,8 @@ impl Crop {
         let width = image.get_width() as f64;
         let height = image.get_height() as f64;
         let x1 = (width * (self.left_percent / 100.0)) as u32;
-        let x2 = (x1 as f64 + (self.width_percent * width / 100.0)) as u32;
         let y1 = (height * (self.top_percent / 100.0)) as u32;
+        let x2 = (x1 as f64 + (self.width_percent * width / 100.0)) as u32;
         let y2 = (y1 as f64 + (self.height_percent * height / 100.0)) as u32;
         crop(&mut image, x1, y1, x2, y2)
     }

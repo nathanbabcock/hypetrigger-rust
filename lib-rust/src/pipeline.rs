@@ -268,41 +268,33 @@ impl Hypetrigger {
     ) -> Result<(Receiver<(u32, u32)>, FfmpegStderrJoinHandle<'scope>)> {
         let (output_size_tx, output_size_rx) = channel::<(u32, u32)>();
         let thread_body = move || {
-            let mut reader = BufReader::new(ffmpeg_stderr);
-            let mut line = String::new();
+            let reader = BufReader::new(ffmpeg_stderr);
             let mut current_section = "";
             let mut output_size: Option<(u32, u32)> = None;
-            loop {
-                // Rust docs claim this isn't necessary, but the buffer
-                // never gets cleared!
-                line.clear();
-
-                match reader.read_line(&mut line) {
-                    Ok(0) => {
-                        break; // (EOF)
-                    }
-                    Ok(_) => {
-                        // Parse for output size if not already found
-                        if output_size.is_none() {
-                            if line.starts_with("Output #") {
-                                current_section = "Output"; // stringly-typed rather than enum for convenience
-                            } else if current_section == "Output" {
-                                if let Some(size) = parse_ffmpeg_output_size(line.as_str()) {
-                                    output_size = Some(size); // remember this, so we don't check for it anymore
-                                    output_size_tx.send(size).map_err(|e| e.to_string())?;
-                                }
-                            }
-                        }
-
-                        // Regular callback on every line of stderr
-                        println!("[ffmpeg.err] {}", line.trim_end());
-                        // TODO: add `self.on_ffmpeg_stderr` callback (possible in a scoped thread)
-                    }
+            for line in reader.lines() {
+                let text = match line {
                     Err(e) => {
                         eprintln!("[ffmpeg.err] Error reading ffmpeg stderr: {}", e);
                         eprintln!("[ffmpeg.err] Attempting to continue reading next line.");
+                        continue;
+                    }
+                    Ok(text) => text,
+                };
+
+                // Parse for output size if not already found
+                if output_size.is_none() {
+                    if text.starts_with("Output #") {
+                        current_section = "Output"; // stringly-typed rather than enum for convenience
+                    } else if current_section == "Output" {
+                        if let Some(size) = parse_ffmpeg_output_size(text.as_str()) {
+                            output_size = Some(size); // remember this, so we don't check for it anymore
+                            output_size_tx.send(size).map_err(|e| e.to_string())?;
+                        }
                     }
                 }
+
+                // Regular callback on every line of stderr
+                println!("[ffmpeg.err] {}", text.trim_end());
             }
 
             println!("[ffmpeg.err] ffmpeg stderr thread exiting");
