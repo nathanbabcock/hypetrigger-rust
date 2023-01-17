@@ -21,6 +21,7 @@ export class Hypetrigger {
     return this
   }
 
+  /** Grab the current frame from the input source and convert it to a PhotonImage */
   getPhotonImage() {
     let photonImage: PhotonImage
     if (this.imageSource instanceof HTMLCanvasElement) {
@@ -33,11 +34,18 @@ export class Hypetrigger {
     }
   }
 
-  /** Run all triggers on the given input source (once) */
-  run() {
+  /** Run all triggers on the given input source (once). */
+  async run() {
+    let promises = []
     for (const trigger of this.triggers)
-      trigger.run(this.getPhotonImage())
-    return this
+      promises.push(trigger.run(this.getPhotonImage()))
+    return Promise.all(this.triggers)
+  }
+
+  /** Run one trigger at a time (default is in parallel) */
+  async runSequentially() {
+    for (const trigger of this.triggers)
+      await trigger.run(this.getPhotonImage())
   }
 
   /** Run all triggers after `timeoutMS`. Calling this method again resets the timer. */
@@ -50,18 +58,49 @@ export class Hypetrigger {
   /**
    * Continuously run all triggers on the given input source.
    * 
-   * Despite the name, it does not use `setInterval`; instead it recursively
-   * calls `setTimeout` with a small delay. This works more reliably than
-   * `requestAnimationFrame`, which can overload the browser's memory if it runs fast enough.
+   * Despite the name, it does not use `setInterval`; instead calls `setTimeout`
+   * after each run. This works more reliably than `requestAnimationFrame`, which
+   * can overload the browser's memory if it runs fast enough.
    */
   runOnInterval(intervalMS = 100) {
     this.isRunningOnInterval = true
-    const callback = () => {
+    const callback = async () => {
       if (!this.isRunningOnInterval) return
-      this.run()
+      await this.run()
       setTimeout(callback, intervalMS)
     }
     callback()
+    return this
+  }
+
+  /**
+   * Re-runs triggers whenever the input changes.
+   * 
+   * Runs once immediately when the method is called, and then again as needed:
+   * - For **image sources**, in a `image.onload` listener
+   * - For **video sources**, in a `requestVideoFrameCallback()`
+   * - For **canvas sources**, you should use `runDebounced()` or
+   *   `runOnInterval()` instead, since there are no events to subscribe to.
+   */
+  runAutomatically() {
+    if (this.imageSource instanceof HTMLImageElement) {
+      if (this.imageSource.complete) this.run()
+      this.imageSource.addEventListener('onload', this.run.bind(this))
+    } else if (this.imageSource instanceof HTMLVideoElement) {
+      if (this.imageSource.readyState === 4) this.run()
+      const callback = async () => {
+        if (!(this.imageSource instanceof HTMLVideoElement)) return
+        await this.run()
+        this.imageSource.requestVideoFrameCallback(callback)
+      }
+      this.imageSource.requestVideoFrameCallback(callback)
+    } else if (this.imageSource instanceof HTMLCanvasElement) {
+      this.run()
+      console.warn('runAutomatically() only runs once for canvas sources. You should use run(), runDebounced(), or runOnInterval() instead.')
+    } else {
+      throw new Error('Unsupported image source type')
+    }
+    this.run()
     return this
   }
 
