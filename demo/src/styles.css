@@ -3,13 +3,10 @@
   --font: 'Fira Sans', sans-serif;
 }
 
-* {
-  background: #242424;
-  color: rgb(232, 232, 232);
-}
-
 body {
   font-family: var(--font);
+  background: #242424;
+  color: rgb(232, 232, 232);
 }
 
 /* .highlight {
@@ -105,4 +102,34 @@ p {
 #clear-btn:focus {
   background: rgba(255, 255, 255, 15%);
   color: white;
+}
+
+.hand {
+  display: inline-block;
+  transform-origin: bottom center;
+}
+
+.wave {
+  animation-name: wave;
+  animation-duration: 0.5s;
+  animation-iteration-count: 2;
+  animation-timing-function: ease-in-out;
+}
+
+@keyframes wave {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(30deg);
+  }
+  /* 50% {
+    transform: rotate(0deg);
+  } */
+  75% {
+    transform: rotate(-30deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
 }

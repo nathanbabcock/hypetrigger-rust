@@ -37,7 +37,7 @@ export default function App() {
         recognizedText()?.text.toLowerCase().includes(greeting.toLowerCase()) ??
         false
     )
-      ? 'Hello to you too! 👋'
+      ? 'Hello to you too!'
       : undefined
 
   createEffect(() =>
@@ -137,13 +137,13 @@ export default function App() {
         <div id="welcome">
           <h1>👈 Say Hello</h1>
           <p>
-            <mark
+            <span
               class={!recognizedText()?.text && !dirty() ? 'highlight' : ''}
             >
               Draw words on the canvas to the left
               <br />
               to test how well Hypetrigger can recognize text in realtime.
-            </mark>
+            </span>
           </p>
         </div>
         <div id="your-wrapper" class={!recognizedText()?.text ? 'hidden' : ''}>
@@ -159,7 +159,10 @@ export default function App() {
           </div>
         </div>
         <div id="response-wrapper" class={!responseText() ? 'hidden' : ''}>
-          <code id="response-text">{responseText()}</code>
+          <code id="response-text">
+            {responseText()}
+            <span class={responseText() ? 'hand wave' : 'hand'}>👋</span>
+          </code>
           <span id="response-label">&mdash; Hypetrigger</span>
         </div>
         {dirty() && (
