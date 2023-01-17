@@ -1,6 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans&family=Palanquin+Dark&display=swap');
+:root {
+  --font: 'Fira Sans', sans-serif;
+}
+
 * {
   background: #242424;
   color: rgb(232, 232, 232);
+}
+
+body {
+  font-family: var(--font);
 }
 
 #container {
@@ -15,5 +24,76 @@
 }
 
 .hidden {
-  display: none;
+  display: none !important;
+}
+
+#right-col {
+  font-size: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+p {
+  margin: 0;
+}
+
+#your-text {
+  margin-right: 1rem;
+}
+
+#your-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+#your-label {
+  margin-bottom: 1rem;
+}
+
+#your-ms,
+#response-label,
+#your-label {
+  opacity: 50%;
+  font-size: 1rem;
+}
+
+#response-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+#response-text {
+  background-color: rgba(50, 205, 50, 50%);
+  border-radius: 99px;
+  padding: 0.5rem 1rem;
+}
+
+#your-text {
+  background-color: rgba(100, 148, 237, 50%);
+  border-radius: 99px;
+  padding: 0.5rem 1rem;
+}
+
+#clear-btn-container {
+  margin-top: auto;
+}
+
+#clear-btn {
+  background: rgba(255, 255, 255, 10%);
+  border-radius: 99px;
+  padding: 1rem 1.5rem;
+  font-size: 1rem;
+  border: 0;
+  cursor: pointer;
+  font-family: var(--font);
+  color: rgba(255, 255, 255, 66%);
+}
+
+#clear-btn:hover,
+#clear-btn:focus {
+  background: rgba(255, 255, 255, 15%);
+  color: white;
 }

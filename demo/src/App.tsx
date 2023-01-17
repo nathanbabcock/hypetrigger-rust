@@ -38,7 +38,7 @@ export default function App() {
         recognizedText()?.text.toLowerCase().includes(greeting.toLowerCase()) ??
         false
     )
-      ? 'Hello to you too!'
+      ? 'Hello to you too! 👋'
       : undefined
 
   createEffect(() =>
@@ -98,7 +98,7 @@ export default function App() {
     const trigger = new TesseractTrigger(scheduler)
     hypetrigger = new Hypetrigger(canvas).addTrigger(trigger)
     trigger.onText = (text, timeMS) =>
-      setRecognizedText({ text, timeMS: Math.round(timeMS) })
+      setRecognizedText({ text: text.trim(), timeMS: Math.round(timeMS) })
     console.log('Ready.')
     detectText()
   }
@@ -134,30 +134,39 @@ export default function App() {
         onTouchStart={startDrawing}
         onTouchEnd={stopDrawing}
         onTouchCancel={stopDrawing}
-      ></canvas>
+      />
       <div id="right-col">
         <div id="welcome">
-          <h1>👈 Say Hello to Hypetrigger.</h1>
+          <h1>👈 Say Hello</h1>
           <p>
-            Draw words on the canvas to the left to test how well Hypetrigger
-            can recognize text in realtime.
+            Draw words on the canvas to the left
+            <br />
+            to test how well Hypetrigger can recognize text in realtime.
           </p>
         </div>
         <div id="your-wrapper" class={!recognizedText()?.text ? 'hidden' : ''}>
           <span id="your-label">You wrote:</span>
-          <code id="your-text">{recognizedText()?.text}</code>
-          <span
-            id="your-ms"
-            title="the time it took to recognize the text in your drawing"
-          >
-            {recognizedText()?.timeMS}ms
-          </span>
+          <div>
+            <code id="your-text">{recognizedText()?.text}</code>
+            <span
+              id="your-ms"
+              title="the time it took to recognize the text in your drawing"
+            >
+              {recognizedText()?.timeMS}ms
+            </span>
+          </div>
         </div>
         <div id="response-wrapper" class={!responseText() ? 'hidden' : ''}>
           <code id="response-text">{responseText()}</code>
-          <span id="response-label">- Hypetrigger</span>
+          <span id="response-label">&mdash; Hypetrigger</span>
         </div>
-        {dirty() && <button onClick={clearCanvas}>Clear Canvas</button>}
+        {dirty() && (
+          <div id="clear-btn-container">
+            <button onClick={clearCanvas} id="clear-btn">
+              Clear Canvas
+            </button>
+          </div>
+        )}
       </div>
     </>
   )
