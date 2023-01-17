@@ -17,13 +17,30 @@ pub const TENSOR_CHANNELS: u64 = 3;
 /// The key in the hashmap of Runners, used to map Triggers to their Runners
 pub const TENSORFLOW_RUNNER: &str = "tensorflow";
 
-pub type TensorflowTriggerCallback = Box<dyn Fn(&Prediction) + Send + Sync>;
+pub type TensorflowTriggerCallback = Box<dyn Fn(TensorflowResult) + Send + Sync>;
 
 pub struct TensorflowTrigger {
     pub crop: Option<Crop>,
     pub bundle: SavedModelBundle,
     pub graph: Graph,
     pub callback: Option<TensorflowTriggerCallback>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Prediction {
+    /// The index of the class with the highest confidence.
+    pub class_index: usize,
+
+    // pub label: String, // TODO
+    /// Confidence interval in the prediction, in the range [0, 1].
+    pub confidence: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TensorflowResult {
+    pub prediction: Prediction,
+    pub timestamp: f64,
+    pub frame_num: u64,
 }
 
 impl Trigger for TensorflowTrigger {
@@ -43,7 +60,12 @@ impl Trigger for TensorflowTrigger {
 
         // 4. callback
         if let Some(callback) = &self.callback {
-            callback(&prediction);
+            let result = TensorflowResult {
+                prediction,
+                timestamp: frame.timestamp,
+                frame_num: frame.frame_num,
+            };
+            callback(result);
         }
 
         Ok(())
@@ -127,15 +149,6 @@ pub fn dummy_tensor() -> Tensor<f32> {
     Tensor::new(&[1, TENSOR_SIZE, TENSOR_SIZE, TENSOR_CHANNELS])
         .with_values(&zero_vec)
         .expect("creating dummy tensor")
-}
-
-pub struct Prediction {
-    /// The index of the class with the highest confidence.
-    pub class_index: usize,
-
-    // pub label: String, // TODO
-    /// Confidence interval in the prediction, in the range [0, 1].
-    pub confidence: f32,
 }
 
 pub fn predict(
