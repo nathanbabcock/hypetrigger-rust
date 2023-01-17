@@ -17,7 +17,7 @@ pub type TesseractTriggerCallback = Arc<dyn Fn(&str) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct TesseractTrigger {
-    pub tesseract: Arc<Mutex<Option<Tesseract>>>,
+    pub tesseract: TesseractRef,
     pub crop: Option<Crop>,
     pub threshold_filter: Option<ThresholdFilter>,
     pub callback: Option<TesseractTriggerCallback>,
@@ -133,8 +133,10 @@ pub fn download_tesseract_traineddata(download_path: &Path) -> Result<()> {
     Ok(file.write_all(body.as_ref())?)
 }
 
+pub type TesseractRef = Arc<Mutex<Option<Tesseract>>>;
+
 /// Initialize a Tesseract instance, automatically downloading traineddata if needed
-pub fn init_tesseract<'a, X, Y>(datapath: X, language: Y) -> Result<Arc<Mutex<Option<Tesseract>>>>
+pub fn init_tesseract<'a, X, Y>(datapath: X, language: Y) -> Result<TesseractRef>
 where
     X: Into<Option<&'a str>>,
     Y: Into<Option<&'a str>>,
