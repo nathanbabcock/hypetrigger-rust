@@ -1,11 +1,15 @@
-use image::RgbImage;
+use image::DynamicImage::ImageRgba8;
+use image::GenericImageView;
+use image::{ImageBuffer, RgbImage, RgbaImage};
 use photon_rs::{
-    transform::{crop, resize, SamplingFilter},
+    helpers,
+    transform::{resize, SamplingFilter},
     PhotonImage, Rgb,
 };
 use std::cmp::min;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use crate::iter::ImageIterator;
 use crate::threshold::threshold_color_distance_rgba;
 
 /// A threshold function based on perceptual color distance
@@ -48,6 +52,22 @@ impl Crop {
         let y2 = (y1 as f64 + (self.height_percent * height / 100.0)) as u32;
         crop(&mut image, x1, y1, x2, y2)
     }
+}
+
+/// Fixed version of `crop` from `photon-rs@0.3.1`.
+/// Fixed on `master` branch, but never published.
+/// <https://github.com/silvia-odwyer/photon/pull/100>
+pub fn crop(photon_image: &mut PhotonImage, x1: u32, y1: u32, x2: u32, y2: u32) -> PhotonImage {
+    let img = helpers::dyn_image_from_raw(photon_image);
+    let mut cropped_img: RgbaImage = ImageBuffer::new(x2 - x1, y2 - y1);
+
+    for (x, y) in ImageIterator::with_dimension(&cropped_img.dimensions()) {
+        let px = img.get_pixel(x1 + x, y1 + y);
+        cropped_img.put_pixel(x, y, px);
+    }
+    let dynimage = ImageRgba8(cropped_img);
+    let raw_pixels = dynimage.to_bytes();
+    PhotonImage::new(raw_pixels, dynimage.width(), dynimage.height())
 }
 
 /// Resize if needed and reserve aspect ratio

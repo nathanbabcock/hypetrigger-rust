@@ -75,10 +75,10 @@ impl TesseractTrigger {
         // Crop
         if let Some(crop) = &self.crop {
             image = crop.apply(image);
-        }
-        if self.enable_debug_breakpoints {
-            println!("[tesseract] cropped");
-            debug_photon_image(&image)?;
+            if self.enable_debug_breakpoints {
+                println!("[tesseract] crop: {:?}", self.crop);
+                debug_photon_image(&image)?;
+            }
         }
 
         // Minimum size
@@ -92,10 +92,10 @@ impl TesseractTrigger {
         // Threshold filter
         if let Some(filter) = &self.threshold_filter {
             image = filter.apply(image);
-        }
-        if self.enable_debug_breakpoints {
-            println!("[tesseract] filtered");
-            debug_photon_image(&image)?;
+            if self.enable_debug_breakpoints {
+                println!("[tesseract] filter: {:?}", filter);
+                debug_photon_image(&image)?;
+            }
         }
 
         // Padding
