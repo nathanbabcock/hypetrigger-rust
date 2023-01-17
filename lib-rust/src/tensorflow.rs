@@ -5,7 +5,7 @@ use crate::{
     trigger::{Frame, Trigger},
 };
 use photon_rs::PhotonImage;
-use std::{path::Path, time::Instant};
+use std::{path::Path, sync::Arc, time::Instant};
 use tensorflow::{Graph, SavedModelBundle, SessionOptions, SessionRunArgs, Tensor};
 
 /// Side length of the square image that the model expects
@@ -17,7 +17,7 @@ pub const TENSOR_CHANNELS: u64 = 3;
 /// The key in the hashmap of Runners, used to map Triggers to their Runners
 pub const TENSORFLOW_RUNNER: &str = "tensorflow";
 
-pub type TensorflowTriggerCallback = Box<dyn Fn(TensorflowResult) + Send + Sync>;
+pub type TensorflowTriggerCallback = Arc<dyn Fn(TensorflowResult) + Send + Sync>;
 
 pub struct TensorflowTrigger {
     pub crop: Option<Crop>,
