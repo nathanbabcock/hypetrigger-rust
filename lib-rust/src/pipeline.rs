@@ -22,6 +22,8 @@ use std::{
 };
 use std::{io::Read, process::Child};
 
+pub type HypetriggerOnCompleteCallback = Arc<dyn Fn() + Send + Sync>;
+
 #[derive(Clone)]
 pub struct Hypetrigger {
     // Path the the ffmpeg binary or command to use
@@ -45,6 +47,10 @@ pub struct Hypetrigger {
 
     /// List of all callback functions to run on each frame of the video
     pub triggers: Vec<Arc<dyn Trigger>>,
+
+    /// Callback when the video is finished processing. Particularly useful in
+    /// combination with `run_async`.
+    pub on_complete_callback: Option<HypetriggerOnCompleteCallback>,
 }
 
 impl Default for Hypetrigger {
@@ -62,6 +68,7 @@ impl Hypetrigger {
             input_format: None,
             fps: 2,
             triggers: vec![],
+            on_complete_callback: None,
         }
     }
 
@@ -110,6 +117,15 @@ impl Hypetrigger {
         for trigger in triggers {
             self.triggers.push(trigger.clone());
         }
+        self
+    }
+
+    /// Call the given function when the input finishes processing
+    pub fn on_complete<T>(&mut self, callback: T) -> &mut Self
+    where
+        T: Fn() + Send + Sync + 'static,
+    {
+        self.on_complete_callback = Some(Arc::new(callback));
         self
     }
 
@@ -318,7 +334,7 @@ pub const FFMPEG_TEST_INPUT: &str = "testsrc=duration=10:size=1280x720:rate=30";
 
 /// Sends a `q` to the ffmpeg process over stdin, which tells it gracefully exit.
 /// You could also call `kill()` on the `Child` process instance of ffmpeg to stop it
-/// more abruptly.
+/// more abruptly. You can obtain the `stdin` handle from the return value of `run_async()`.
 pub fn stop_ffmpeg(stdin: &mut ChildStdin) -> Result<()> {
     stdin.write_all(b"q\n").map_err(Error::from)
 }
