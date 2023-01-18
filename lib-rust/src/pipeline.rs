@@ -234,7 +234,11 @@ impl Hypetrigger {
                 }
                 frame_num += 1;
             }
+            
             println!("[ffmpeg.out] Finished reading from stdout");
+            if let Some(callback) = &self.on_complete_callback {
+                callback();
+            }
             Ok(())
         }).map_err(Error::from)
     }
