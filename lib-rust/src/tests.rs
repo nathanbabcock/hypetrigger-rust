@@ -37,6 +37,7 @@ fn tesseract() -> Result<()> {
         }),
         threshold_filter: None,
         callback: None,
+        enable_debug_breakpoints: false,
     };
 
     Hypetrigger::new()
@@ -60,6 +61,7 @@ fn async_trigger() -> Result<()> {
         }),
         threshold_filter: None,
         callback: None,
+        enable_debug_breakpoints: false,
     };
     let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread);
 
