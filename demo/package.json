@@ -12,6 +12,7 @@
     "solid-js": "1.6.9"
   },
   "devDependencies": {
+    "typescript": "^4.9.4",
     "@types/node": "^18.11.18",
     "hypetrigger": "file:../hypetrigger/lib-js/",
     "tesseract.js": "4.0.2",
