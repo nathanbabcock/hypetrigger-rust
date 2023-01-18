@@ -10,6 +10,9 @@
   "dependencies": {
     "tesseract.js": "^4.0.2"
   },
+  "devDependencies": {
+    "typescript": "^4.9.4"
+  },
   "author": "",
   "license": "ISC"
 }
