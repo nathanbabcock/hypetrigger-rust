@@ -66,6 +66,16 @@ impl Trigger for TesseractTrigger {
 }
 
 impl TesseractTrigger {
+    pub fn new() -> Self {
+        Self {
+            tesseract: Arc::new(Mutex::new(None)),
+            crop: None,
+            threshold_filter: None,
+            callback: None,
+            enable_debug_breakpoints: false,
+        }
+    }
+
     pub fn preprocess_image(&self, mut image: PhotonImage) -> Result<PhotonImage> {
         if self.enable_debug_breakpoints {
             println!("[tesseract] received frame");
@@ -128,6 +138,12 @@ impl TesseractTrigger {
         let result = tesseract.get_text()?;
         let _tesseract = mutex_guard.insert(tesseract);
         Ok(result)
+    }
+}
+
+impl Default for TesseractTrigger {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
