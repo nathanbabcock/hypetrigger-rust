@@ -228,9 +228,7 @@ impl Hypetrigger {
                     timestamp: frame_num as f64 / self.fps as f64,
                 };
                 for trigger in &self.triggers {
-                    if let Err(e) = trigger.on_frame(&frame) {
-                        eprintln!("Error in trigger: {}", e);
-                    }
+                    trigger.on_frame(&frame).map_err(|e| e.to_string())?;
                 }
                 frame_num += 1;
             }
