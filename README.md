@@ -115,8 +115,8 @@ match. ⚽
 
 ```toml
 [dependencies]
-hypetrigger = { version = "0.2.0", features = "tesseract" }
-# enable the `tesseract` feature
+hypetrigger = { version = "0.2.0", features = ["photon", "tesseract"] }
+# enable the `tesseract` feature and its `photon` dependency for image processing
 # see the "Native Dependencies" section in `README.md` if you have trouble building
 ```
 

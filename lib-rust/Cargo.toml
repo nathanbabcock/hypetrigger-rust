@@ -19,7 +19,7 @@ crate-type = ["cdylib", "rlib"]
 # path = "src/main.rs"
 
 [features]
-default = ["photon", "tesseract", "tensorflow", "console_error_panic_hook"]
+default = ["console_error_panic_hook"]
 photon = ["dep:photon-rs"]
 tesseract = ["photon", "dep:reqwest", "dep:tesseract"]
 tensorflow = ["photon", "dep:tensorflow"]

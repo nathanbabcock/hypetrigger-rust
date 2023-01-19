@@ -4,8 +4,6 @@ use std::io;
 use std::sync::mpsc::SendError;
 use std::sync::PoisonError;
 
-use tesseract::plumbing::{TessBaseApiGetUtf8TextError, TessBaseApiSetImageSafetyError};
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
@@ -125,15 +123,15 @@ impl From<tesseract::InitializeError> for Error {
 }
 
 #[cfg(feature = "tesseract")]
-impl From<TessBaseApiSetImageSafetyError> for Error {
-    fn from(e: TessBaseApiSetImageSafetyError) -> Self {
+impl From<tesseract::plumbing::TessBaseApiSetImageSafetyError> for Error {
+    fn from(e: tesseract::plumbing::TessBaseApiSetImageSafetyError) -> Self {
         Error::from_std(e)
     }
 }
 
 #[cfg(feature = "tesseract")]
-impl From<TessBaseApiGetUtf8TextError> for Error {
-    fn from(e: TessBaseApiGetUtf8TextError) -> Self {
+impl From<tesseract::plumbing::TessBaseApiGetUtf8TextError> for Error {
+    fn from(e: tesseract::plumbing::TessBaseApiGetUtf8TextError) -> Self {
         Error::from_std(e)
     }
 }

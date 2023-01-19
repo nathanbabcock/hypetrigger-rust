@@ -27,3 +27,29 @@ impl SimpleTrigger {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::SimpleTrigger;
+    use crate::{
+        error::{Error, Result},
+        pipeline::Hypetrigger,
+    };
+
+    #[test]
+    fn simple_trigger() -> Result<()> {
+        Hypetrigger::new()
+            .test_input()
+            .add_trigger(SimpleTrigger::new(|frame| {
+                println!(
+                    "received frame {}: {}x{}",
+                    frame.frame_num,
+                    frame.image.width(),
+                    frame.image.height()
+                );
+                // Now do whatever you want with it...
+            }))
+            .run()
+            .map_err(Error::from_display)
+    }
+}

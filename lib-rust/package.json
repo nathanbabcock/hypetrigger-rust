@@ -1,15 +1,11 @@
 {
-  "name": "hypetrigger-wasm-demo",
+  "name": "hypetrigger-lib-rust",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
   "scripts": {
     "cargo-watch": "cargo watch -c -w src -x run",
+    "cargo-test": "cargo test --all-features",
     "wasm-pack": "wasm-pack build --target web -- --no-default-features --features wasm",
     "wasm-watch": "cargo watch -c -w src -s \"npm run wasm-pack -- --dev\""
-  },
-  "devDependencies": {
-    "typescript": "^4.6.4",
-    "vite": "^3.2.3"
   }
 }

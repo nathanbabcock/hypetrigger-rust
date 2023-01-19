@@ -206,3 +206,60 @@ where
     let tesseract = Tesseract::new(Some(datapath), Some(language))?;
     Ok(Arc::new(Mutex::new(Some(tesseract))))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{init_tesseract, TesseractTrigger};
+    use crate::async_trigger::{AsyncTrigger, TriggerThread};
+    use crate::error::{Error, Result};
+    use crate::photon::Crop;
+    use crate::pipeline::Hypetrigger;
+
+    #[test]
+    fn tesseract() -> Result<()> {
+        let tesseract = init_tesseract(None, None)?;
+        let trigger = TesseractTrigger {
+            tesseract,
+            crop: Some(Crop {
+                left_percent: 25.0,
+                top_percent: 25.0,
+                width_percent: 10.0,
+                height_percent: 10.0,
+            }),
+            threshold_filter: None,
+            callback: None,
+            enable_debug_breakpoints: false,
+        };
+
+        Hypetrigger::new()
+            .test_input()
+            .add_trigger(trigger)
+            .run()
+            .map_err(Error::from_display)
+    }
+
+    #[test]
+    fn async_trigger() -> Result<()> {
+        let runner_thread = TriggerThread::spawn();
+        let tesseract = init_tesseract(None, None)?;
+        let base_trigger = TesseractTrigger {
+            tesseract,
+            crop: Some(Crop {
+                left_percent: 25.0,
+                top_percent: 25.0,
+                width_percent: 10.0,
+                height_percent: 10.0,
+            }),
+            threshold_filter: None,
+            callback: None,
+            enable_debug_breakpoints: false,
+        };
+        let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread);
+
+        Hypetrigger::new()
+            .test_input()
+            .add_trigger(trigger)
+            .run()
+            .map_err(Error::from_display)
+    }
+}

@@ -1,4 +1,4 @@
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 #[macro_use]
 extern crate lazy_static;
 
@@ -21,29 +21,25 @@ pub mod tesseract;
 #[cfg(feature = "tensorflow")]
 pub mod tensorflow;
 
-//// Tests
-#[cfg(test)]
-mod tests;
-
 //// Core functionality
 // Not WASM-safe; intended for Rust usage only. Involves spawning and attaching to ffmpeg processes.
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod async_trigger;
 
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod debug;
 
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod error;
 
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod pipeline;
 
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod simple_trigger;
 
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod trigger;
 
-#[cfg(not(feature = "wasm"))]
+#[cfg(not(target_arch = "wasm32"))]
 pub mod util;
