@@ -1,9 +1,15 @@
 {
   "name": "hypetrigger",
-  "version": "0.0.1",
-  "description": "",
-  "main": "src/index.ts",
+  "version": "0.1.0",
+  "description": "Realtime text recognition on streaming video",
+  "author": "Nathan Babcock <nathan.r.babcock@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathanbabcock/hypetrigger.git"
+  },
+  "homepage": "https://hypetrigger.io",
   "type": "module",
+  "main": "src/index.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -13,6 +19,5 @@
   "devDependencies": {
     "typescript": "^4.9.4"
   },
-  "author": "",
-  "license": "ISC"
+  "license": "MIT"
 }
