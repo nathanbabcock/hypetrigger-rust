@@ -45,7 +45,6 @@ Video → FFMPEG → Tensorflow/Tesseract/Custom → Callback
    MEDIA SOURCE        VIDEO DECODING        COMPUTER VISION     CALLBACK
 ```
 
-
 ## Getting started (Rust)
 
 ```console
@@ -72,7 +71,36 @@ fn main() {
 
 ## Getting started (Typescript)
 
-> Coming soon 🚧
+Browser and Node is supported through a WASM compilation of the image
+preprocessing code with the excellent
+[Photon.js](https://github.com/silvia-odwyer/photon) image processing library.
+After that [Tesseract.js](https://github.com/naptha/tesseract.js/) is used for
+the text recognition.
+
+```console
+npm add hypetrigger
+```
+
+```ts
+const videoElem = document.getElementById('video')
+const pipeline = new Hypetrigger(videoElem)
+  .addTrigger(frame => {
+    console.log({ frame })
+    // do whatever you want with the frame
+  })
+  .autoRun()
+```
+
+### Limitations
+
+The TS version is not a fully featured port of the Rust library; it is more of a
+parallel toolkit with a subset of the full functionality.
+
+There are no [Tensorflow.js](https://github.com/tensorflow/tfjs) bindings yet,
+and frames are pulled directly from media sources, eliminating the use of FFMPEG
+completely.
+
+For more information, see this page in the docs: [Using with other languages](/docs/src/other-languages).
 
 ## In-depth example
 
@@ -166,7 +194,7 @@ fn main() {
         .input("https://example.com/world-cup-broadcast.m3u8")
         .add_trigger(trigger)
         .run();
-    
+
     // `run()` will block the main thread until the job completes,
     // but the callback will be invoked in realtime as frames are processed!
 }

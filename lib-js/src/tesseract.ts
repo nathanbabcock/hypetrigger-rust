@@ -1,4 +1,4 @@
-import { Crop, ensure_minimum_size, padding_uniform, PhotonImage, Rgba, ThresholdFilter, putImageData } from '..'
+import { Crop, PhotonImage, ThresholdFilter, putImageData } from '..'
 import { createScheduler, createWorker, RecognizeResult, Scheduler, Worker } from 'tesseract.js'
 import Tesseract from 'tesseract.js'
 import { Trigger } from './trigger'

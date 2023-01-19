@@ -82,7 +82,7 @@ export class Hypetrigger {
    * - For **canvas sources**, you should use `runDebounced()` or
    *   `runOnInterval()` instead, since there are no events to subscribe to.
    */
-  runAutomatically() {
+  autoRun() {
     if (this.imageSource instanceof HTMLImageElement) {
       if (this.imageSource.complete) this.run()
       this.imageSource.addEventListener('onload', this.run.bind(this))
@@ -96,7 +96,7 @@ export class Hypetrigger {
       this.imageSource.requestVideoFrameCallback(callback)
     } else if (this.imageSource instanceof HTMLCanvasElement) {
       this.run()
-      console.warn('runAutomatically() only runs once for canvas sources. You should use run(), runDebounced(), or runOnInterval() instead.')
+      console.warn('autoRun() only runs once for canvas sources. You should use run(), runDebounced(), or runOnInterval() instead.')
     } else {
       throw new Error('Unsupported image source type')
     }
