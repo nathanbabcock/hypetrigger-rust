@@ -39,6 +39,104 @@ fn main() {
 
 > Coming soon 🚧
 
+## In-depth example
+
+> This is slightly simplified sample code. It won't immediately compile and work
+> without the right input source and parameters, but it illustrates how to use
+> the API to solve a real-world problem.
+
+**Problem statement:** Detect when a goal is scored in live video of a World Cup
+match.
+
+### `Cargo.toml`
+
+```toml
+[dependencies]
+hypetrigger = { version = "0.2.0", features = "tesseract" }
+# enable the `tesseract` feature
+# see the "Native Dependencies" section in `README.md` if you have trouble building
+```
+
+### `main.rs`
+
+```rs
+use hypetrigger::{Hypetrigger, SimpleTrigger};
+use hypetrigger::photon::{Crop, ThresholdFilter};
+use hypetrigger::tesseract::{TesseractTrigger, init_tesseract}
+
+fn main() {
+    // First, init a Tesseract instance with default params
+    let tesseract = init_tesseract(None, None)?;
+
+    // Initialize some state (use an Rc or Arc<Mutex> if needed)
+    let mut last_score: Option<u32> = None;
+
+    // Create a trigger that will be used to detect the scoreboard
+    let trigger = TesseractTrigger {
+        tesseract, // pass in the Tesseract instance
+
+        // Identify the rectangle of the video that contains
+        // the scoreboard (probably the bottom-middle of the
+        // screen)
+        crop: Some(Crop {
+            left_percent: 25.0,
+            top_percent: 25.0,
+            width_percent: 10.0,
+            height_percent: 10.0,
+        }),
+
+        // Filter the image to black and white
+        // based on text color. This preprocessing improves Tesseract's
+        // ability to recognize text. You could replace it with
+        // your own custom preprocessing, like edge-detection,
+        // sharpening, or anything else.
+        threshold_filter: Some(ThresholdFilter {
+          r: 255,
+          g: 255,
+          b: 255,
+          threshold: 42,
+        }),
+
+        // Attach the callback which will run on every frame with the
+        // recognized text
+        callback: |result| {
+          let parsed_score: u32 = result.text.parse();
+          if parsed_score.is_err() {
+            return Ok(()) // no score detected; continue to next frame
+          }
+
+          // Check for different score than last frame
+          if last_score.unwrap() == parsed_score.unwrap() {
+            println!("A goal was scored!");
+
+            // Do something:
+            todo!("celebrate 🎉");
+            todo!("tell your friends");
+            todo!("record a clip");
+            todo!("send a tweet");
+            todo!("cut to commercial break");
+          }
+
+          // Update state
+          last_score = parsed_score;
+        },
+
+        // Using this option will pause after every frame,
+        // so you can see the effect of your crop + filter settings
+        enable_debug_breakpoints: false,
+    };
+
+    // Create a pipeline using the input video and your customized trigger
+    Hypetrigger::new()
+        .input("https://example.com/world-cup-broadcast.m3u8")
+        .add_trigger(trigger)
+        .run();
+    
+    // `run()` will block the main thread until the job completes,
+    // but the callback will be invoked in realtime as frames are processed!
+}
+```
+
 ## Native Dependencies
 
 ### Visual Studio Build Tools
