@@ -1,7 +1,7 @@
 {
   "name": "hypetrigger",
-  "version": "0.1.0",
-  "description": "Realtime text recognition on streaming video",
+  "version": "0.1.1",
+  "description": "Realtime text recognition for streaming video",
   "author": "Nathan Babcock <nathan.r.babcock@gmail.com>",
   "repository": {
     "type": "git",
@@ -11,6 +11,8 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
+    "copy": "cp ../README.md .",
+    "publish": "npm run copy && npm publish",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
