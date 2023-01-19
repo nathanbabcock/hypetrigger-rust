@@ -42,31 +42,29 @@ fn main() {
 ## Architecture diagram
 
 ```txt
-                                         metadata,
-                                         progress,
-                                          errors
-                                            ▲
-                                            │
-                                       ┌────┴───┐         ┌─────────────────┐  text recognition
-                                 ┌─────► stderr │     ┌───► tesseract       ├──────────────────────►  on_frame callback
-                                 │     └────────┘     │   └─────────────────┘
-                                 │                    │
-       ┌─────────────┐   ┌───────┴┐    ┌────────┐     │   ┌─────────────────┐  image recognition
-       │ Input Video ├───► ffmpeg ├────► stdout ├─────┼───► tensorflow      ├──────────────────────►  on_frame callback
-       └─────────────┘   └───────┬┘    └────────┘     │   └─────────────────┘
-        - Video files            │                    │
-        - Static images          │     ┌────────┐     │   ┌─────────────────┐  arbitrary rust code
-        - HTTP URLs              └─────► stdin  │     └───► custom trigger  ├──────────────────────►  on_frame callback
-        - Live streams                 └────────┘         └─────────────────┘
-        - Desktop capture                   ▲
-        - Webcam video                      │
-                                       pause/stop
-                                        commands
+                                 metadata,
+                                 progress,
+                                  errors
+                                    ▲
+                                    │
+                            ┌───────┴───┐   ┌────────────┐
+                         ┌──► stderr    │ ┌─► tesseract  ├─────► callback
+                         │  └───────────┘ │ └────────────┘
+                         │                │
+ ┌─────────────┐ ┌───────┴┐ ┌───────────┐ │ ┌────────────┐
+ │ Input Video ├─► ffmpeg ├─► stdout    ├─┼─► tensorflow ├─────► callback
+ └─────────────┘ └───────┬┘ └───────────┘ │ └────────────┘
+  - Video files          │                │
+  - Static images        │  ┌───────────┐ │ ┌────────────────┐
+  - HTTP URLs            └──► stdin     │ └─► custom trigger ├─► callback
+  - Live streams            └───────┬───┘   └────────────────┘
+  - Desktop capture                 │
+  - Webcam video                    ▼
+                               pause/stop
+                                commands
 
-      └───────────────┘ └────────────────────────────┘  └──────────────────────────────────────────┘ └─────────────────┘
-         MEDIA SOURCE            VIDEO DECODING                       COMPUTER VISION                   FRAME CALLBACK
-
-
+ └─────────────┘ └───────────────────────┘ └─────────────────┘   └──────┘
+   MEDIA SOURCE       VIDEO DECODING         COMPUTER VISION     CALLBACK
 ```
 
 ## In-depth example
