@@ -102,7 +102,7 @@ completely.
 
 For more information, see this page in the docs: [Using with other languages](/docs/src/other-languages).
 
-## In-depth example
+## In-depth example (Rust)
 
 > This is slightly simplified sample code. It won't immediately compile and work
 > without the right input source and parameters, but it illustrates how to use

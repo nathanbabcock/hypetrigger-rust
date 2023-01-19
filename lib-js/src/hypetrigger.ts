@@ -1,5 +1,5 @@
 import { open_image, PhotonImage } from '.'
-import { Trigger } from './trigger'
+import { SimpleTrigger, Trigger, TriggerCallback } from './trigger'
 
 export class Hypetrigger {
   public triggers: Trigger[] = []
@@ -16,7 +16,8 @@ export class Hypetrigger {
     return this
   }
 
-  addTrigger(trigger: Trigger) {
+  addTrigger(trigger: Trigger | TriggerCallback) {
+    if (typeof trigger === 'function') trigger = new SimpleTrigger(trigger)
     this.triggers.push(trigger)
     return this
   }
