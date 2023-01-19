@@ -2,11 +2,16 @@
 
 GPU-accelerated computer vision pipeline for native and web.
 
+Perform efficient per-frame operations on streaming video.
+
 **Links**
 | [hypetrigger.io](https://hypetrigger.io)
+| [Github](https://github.com/nathanbabcock/hypetrigger)
 | [crates.io](https://crates.io/crates/hypetrigger)
+| [docs.rs](https://docs.rs/hypetrigger)
+| [npm](https://www.npmjs.com/package/hypetrigger)
 
-## Getting started (Cargo)
+## Getting started (Rust)
 
 ```console
 cargo install hypetrigger
@@ -30,7 +35,7 @@ fn main() {
 }
 ```
 
-## Getting started (NPM)
+## Getting started (Typescript)
 
 > Coming soon 🚧
 
