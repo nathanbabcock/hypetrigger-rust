@@ -1,0 +1,7 @@
+[package]
+name = "hypetrigger-rust-hello-world"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hypetrigger = { path = "../../lib-rust", features = ["photon", "tesseract"] }

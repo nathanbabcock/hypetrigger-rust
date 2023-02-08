@@ -14,7 +14,7 @@
   "devDependencies": {
     "typescript": "^4.9.4",
     "@types/node": "^18.11.18",
-    "hypetrigger": "file:../hypetrigger/lib-js/",
+    "hypetrigger": "^0.1.1",
     "tesseract.js": "4.0.2",
     "vite": "^4.0.4",
     "vite-plugin-solid": "^2.5.0",

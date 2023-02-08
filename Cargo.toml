@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+  "examples/rust-hello-world",
+  "lib-rust"
+]
