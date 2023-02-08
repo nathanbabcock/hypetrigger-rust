@@ -1,0 +1,10 @@
+[package]
+name = "rust-simple"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hypetrigger = { path = "../../lib-rust" }
+image = "0.23.14" # matches the version used in Hypetrigger

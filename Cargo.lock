@@ -777,13 +777,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hypetrigger-rust-hello-world"
-version = "0.1.0"
-dependencies = [
- "hypetrigger",
-]
-
-[[package]]
 name = "idna"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1634,6 +1627,21 @@ checksum = "04ada202c9685e1d72a7420c578e92b358dbf807d3dfabb676a3dab9cc3bb12f"
 dependencies = [
  "matrixmultiply",
  "num 0.1.42",
+]
+
+[[package]]
+name = "rust-simple"
+version = "0.1.0"
+dependencies = [
+ "hypetrigger",
+ "image",
+]
+
+[[package]]
+name = "rust-tesseract"
+version = "0.1.0"
+dependencies = [
+ "hypetrigger",
 ]
 
 [[package]]

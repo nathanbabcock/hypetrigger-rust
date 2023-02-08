@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
-  "examples/rust-hello-world",
+  "examples/rust-tesseract",
+  "examples/rust-simple",
   "lib-rust"
 ]
