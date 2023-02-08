@@ -4,7 +4,8 @@
   "description": "",
   "main": "src/index.tsx",
   "scripts": {
-    "start": "vite"
+    "start": "vite",
+    "dev": "vite"
   },
   "author": "",
   "license": "ISC",

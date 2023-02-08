@@ -1,9 +1,9 @@
 import { createEffect, createSignal, onCleanup } from 'solid-js'
-import { Hypetrigger, initWasm } from '../../lib-js/src'
+import { Hypetrigger, initWasm } from '../../../lib-js/src'
 import {
   initTesseractScheduler,
   TesseractTrigger,
-} from './../../lib-js/src/tesseract'
+} from './../../../lib-js/src/tesseract'
 
 const greetings = [
   'hey',
