@@ -48,7 +48,7 @@ Video → FFMPEG → Tensorflow/Tesseract/Custom → Callback
 ## Getting started (Rust)
 
 ```console
-cargo install hypetrigger
+cargo add hypetrigger
 ```
 
 ```rs
