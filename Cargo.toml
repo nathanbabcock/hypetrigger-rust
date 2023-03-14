@@ -3,5 +3,6 @@
 members = [
   "examples/rust-tesseract",
   "examples/rust-simple",
+  "examples/v2",
   "lib-rust"
 ]

@@ -43,3 +43,12 @@ pub mod trigger;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod util;
+
+//// NEW:
+
+#[cfg(feature = "photon")]
+pub use photon_rs;
+
+pub use ffmpeg_sidecar as ffmpeg;
+
+pub mod image;
