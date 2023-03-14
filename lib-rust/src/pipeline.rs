@@ -179,11 +179,15 @@ impl Hypetrigger {
 
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
     pub fn run(&mut self) -> Result<()> {
-        self.ffmpeg_command()
-            .spawn()?
+        let mut child = self.ffmpeg_command().spawn()?;
+        child
             .iter()?
             .for_each(|event| self.handle_triggers(event).unwrap_or(()));
-        Ok(())
+        match child.as_inner_mut().wait() {
+            Ok(status) if status.success() => Ok(()),
+            Ok(status) => Err(Error::from_display(status)),
+            Err(e) => Err(Error::from_std(e)),
+        }
     }
 
     /// Same as calling `run` on a separate thread, returning both the thread's
