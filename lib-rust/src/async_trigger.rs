@@ -10,13 +10,12 @@ use std::{
 #[derive(Clone)]
 pub struct AsyncTrigger {
     pub trigger: Arc<dyn Trigger>,
-    pub runner_thread: Arc<TriggerThread>,
+    pub runner_tx: SyncSender<TriggerCommand>,
 }
 
 impl Trigger for AsyncTrigger {
     fn on_frame(&self, frame: &Frame) -> Result<()> {
-        self.runner_thread
-            .tx
+        self.runner_tx
             .send(TriggerCommand::Packet(TriggerPacket {
                 frame: frame.clone(),
                 trigger: self.trigger.clone(),
@@ -26,13 +25,13 @@ impl Trigger for AsyncTrigger {
 }
 
 impl AsyncTrigger {
-    pub fn from_trigger<T>(trigger: T, runner_thread: Arc<TriggerThread>) -> Self
+    pub fn from_trigger<T>(trigger: T, runner_tx: SyncSender<TriggerCommand>) -> Self
     where
         T: Trigger + 'static,
     {
         Self {
             trigger: Arc::new(trigger),
-            runner_thread,
+            runner_tx,
         }
     }
 }
@@ -48,7 +47,7 @@ impl TriggerThread {
     /// Prepares a new thread capable of running Triggers, including the
     /// communication channels, spawning the thread itself, and wrapping the
     /// whole struct in an `Arc`.
-    pub fn spawn() -> Arc<Self> {
+    pub fn spawn() -> Self {
         let (tx, rx) = std::sync::mpsc::sync_channel::<TriggerCommand>(100);
         let join_handle = thread::spawn(move || {
             println!("[trigger_thread] Listening for async trigger commands.");
@@ -68,7 +67,14 @@ impl TriggerThread {
             }
             println!("[trigger_thread] Exiting.");
         });
-        Arc::new(Self { tx, join_handle })
+        Self { tx, join_handle }
+    }
+
+    pub fn stop(self) -> Result<()> {
+        println!("[trigger_thread] Sending stop command.");
+        self.tx.send(TriggerCommand::Stop)?;
+        self.join_handle.join().map_err(|e| format!("{:?}", e))?;
+        Ok(())
     }
 }
 

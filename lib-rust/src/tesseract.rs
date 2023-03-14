@@ -234,6 +234,7 @@ mod tests {
         Hypetrigger::new()
             .test_input()
             .add_trigger(trigger)
+            .set_verbose(true)
             .run()
             .map_err(Error::from_display)
     }
@@ -254,12 +255,16 @@ mod tests {
             callback: None,
             enable_debug_breakpoints: false,
         };
-        let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread);
+        let trigger = AsyncTrigger::from_trigger(base_trigger, runner_thread.tx.clone());
 
         Hypetrigger::new()
             .test_input()
+            .set_verbose(true)
             .add_trigger(trigger)
             .run()
-            .map_err(Error::from_display)
+            .map_err(Error::from_display)?;
+
+        runner_thread.stop()?;
+        Ok(())
     }
 }
