@@ -1,13 +1,27 @@
 # Hypetrigger ⚡
 
-Perform efficient per-frame operations on streaming video.
+[Github](https://github.com/nathanbabcock/hypetrigger)
+| [Crates.io](https://crates.io/crates/hypetrigger)
+| [Docs.rs](https://docs.rs/hypetrigger)
+| [NPM](https://www.npmjs.com/package/hypetrigger)
+| [Website](https://hypetrigger.io)
+| [Discord](https://discord.gg/vCadVCzWM9)
 
-**Links**
-| [hypetrigger.io](https://hypetrigger.io)
-| [Github](https://github.com/nathanbabcock/hypetrigger)
-| [crates.io](https://crates.io/crates/hypetrigger)
-| [docs.rs](https://docs.rs/hypetrigger)
-| [npm](https://www.npmjs.com/package/hypetrigger)
+> Perform efficient per-frame operations on streaming video.
+
+## What does it do?
+
+- 🎥 **Streaming video input** with
+  [`ffmpeg-sidecar`](https://github.com/nathanbabcock/ffmpeg-sidecar)
+- 💡 **Image processing** with [Photon](https://github.com/silvia-odwyer/photon)
+- 📜 **Text recognition** with [Tesseract](https://github.com/tesseract-ocr/tesseract)
+- 🖼 **Image recognition** with [Tensorflow](https://github.com/tensorflow/tensorflow)
+- 🌐 **WASM output** with [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen)
+
+> 👉 If you're just looking for a minimal wrapper around FFmpeg without the extra
+> bindings for image processing and computer vision, you should use the
+> [`ffmpeg-sidecar`](https://github.com/nathanbabcock/ffmpeg-sidecar) crate
+> directly. 🏍
 
 ## Architecture diagram
 
@@ -35,15 +49,16 @@ Video → FFMPEG → Tensorflow/Tesseract/Custom → Callback
   - Video files          │                │
   - Static images        │  ┌───────────┐ │ ┌────────────────┐
   - HTTP URLs            └──► stdin     │ └─► custom trigger ├─► callback
-  - Live streams            └───────┬───┘   └────────────────┘
+  - Live streams            └───────▲───┘   └────────────────┘
   - Desktop capture                 │
-  - Webcam video                    ▼
+  - Webcam video                    |
                                pause/stop
                                 commands
 
  └─────────────┘ └───────────────────────┘ └─────────────────┘   └──────┘
    MEDIA SOURCE        VIDEO DECODING        COMPUTER VISION     CALLBACK
 ```
+
 
 ## Getting started (Rust)
 
@@ -68,39 +83,6 @@ fn main() {
         .run();
 }
 ```
-
-## Getting started (Typescript)
-
-Browser and Node are supported through a WASM compilation of the image
-preprocessing code with the excellent
-[Photon.js](https://github.com/silvia-odwyer/photon) image processing library.
-After that [Tesseract.js](https://github.com/naptha/tesseract.js/) is used for
-the text recognition.
-
-```console
-npm add hypetrigger
-```
-
-```ts
-const videoElem = document.getElementById('video')
-const pipeline = new Hypetrigger(videoElem)
-  .addTrigger(frame => {
-    console.log({ frame })
-    // do whatever you want with the frame
-  })
-  .autoRun()
-```
-
-### Limitations
-
-The TS version is not a fully featured port of the Rust library; rather it is more of a
-parallel toolkit with a subset of the full functionality.
-
-There are no [Tensorflow.js](https://github.com/tensorflow/tfjs) bindings yet,
-and frames are pulled directly from media sources, eliminating the useage of FFMPEG
-completely.
-
-For more information, see this page in the docs: [Using with other languages](/docs/src/other-languages).
 
 ## In-depth example (Rust)
 
@@ -200,6 +182,39 @@ fn main() {
 }
 ```
 
+## Getting started (Typescript)
+
+Browser and Node are supported through a WASM compilation of the image
+preprocessing code with the excellent
+[Photon.js](https://github.com/silvia-odwyer/photon) image processing library.
+After that [Tesseract.js](https://github.com/naptha/tesseract.js/) is used for
+the text recognition.
+
+```console
+npm add hypetrigger
+```
+
+```ts
+const videoElem = document.getElementById('video')
+const pipeline = new Hypetrigger(videoElem)
+  .addTrigger(frame => {
+    console.log({ frame })
+    // do whatever you want with the frame
+  })
+  .autoRun()
+```
+
+### Limitations
+
+The TS version is not a fully featured port of the Rust library; rather it is more of a
+parallel toolkit with a subset of the full functionality.
+
+There are no [Tensorflow.js](https://github.com/tensorflow/tfjs) bindings yet,
+and frames are pulled directly from media sources, eliminating the useage of FFMPEG
+completely.
+
+For more information, see this page in the docs: [Using with other languages](/docs/src/other-languages).
+
 ## Native Dependencies
 
 ### Visual Studio Build Tools
@@ -219,7 +234,7 @@ Should be installed automatically by Cargo.
 
 ### Tesseract
 
-Install manually with `vcpkg`: ([Github](https://github.com/microsoft/vcpkg#quick-start-windows))
+Install manually with `vcpkg` ([Github](https://github.com/microsoft/vcpkg#quick-start-windows)):
 
 ```sh
 git clone https://github.com/microsoft/vcpkg
@@ -230,7 +245,7 @@ cd vcpkg
 ./vcpkg install tesseract:x64-windows-static-md
 ```
 
-Also install **`libclang`** included in the [latest LLVM release](https://github.com/llvm/llvm-project/releases).
+Also install `libclang` included in the [latest LLVM release](https://github.com/llvm/llvm-project/releases).
 
 Current version: <https://github.com/llvm/llvm-project/releases/download/llvmorg-14.0.6/LLVM-14.0.6-win64.exe>
 
@@ -251,3 +266,7 @@ If you get OpenSSL/Perl errors like this:
 
 Try running once from windows `cmd.exe` instead of VSCode integrated terminal
 and/or git bash.
+
+## Contribution
+
+Pull requests, bug reports, and feature requests are welcome on the Github page.
