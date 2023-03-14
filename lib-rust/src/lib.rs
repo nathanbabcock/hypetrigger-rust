@@ -9,9 +9,6 @@ extern crate lazy_static;
 pub mod photon;
 
 #[cfg(feature = "photon")]
-pub mod iter;
-
-#[cfg(feature = "photon")]
 pub mod threshold;
 
 //// Specific trigger implementations (tesseract, tensorflow)
