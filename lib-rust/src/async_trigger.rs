@@ -70,6 +70,10 @@ impl TriggerThread {
         Self { tx, join_handle }
     }
 
+    /// Send a stop command to the thread, and join while waiting for it to exit.
+    /// Since `TriggerThread`'s will stick around indefinitely waiting for more
+    /// input, it's important to call this in your program's flow when you know
+    /// you're done using it.
     pub fn stop(self) -> Result<()> {
         println!("[trigger_thread] Sending stop command.");
         self.tx.send(TriggerCommand::Stop)?;
