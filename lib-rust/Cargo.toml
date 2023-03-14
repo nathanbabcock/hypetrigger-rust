@@ -1,6 +1,6 @@
 [package]
 name = "hypetrigger"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Nathan Babcock <nathan.r.babcock@gmail.com>"]
 description = "Perform efficient per-frame operations on streaming video"
