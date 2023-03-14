@@ -157,34 +157,44 @@ impl Hypetrigger {
         cmd
     }
 
+    /// A lower-level function ...
+    pub fn handle_triggers(&self, event: FfmpegEvent) -> Result<()> {
+        match event {
+            FfmpegEvent::OutputFrame(frame) => {
+                let image = RgbImage::from_vec(frame.width, frame.height, frame.data)
+                    .ok_or("Failed to get image from frame")?;
+                let frame = Frame {
+                    image,
+                    frame_num: frame.frame_num as u64,
+                    timestamp: frame.timestamp as f64,
+                };
+                self.triggers
+                    .iter()
+                    .map(|trigger| trigger.on_frame(&frame))
+                    .all(|r| r.is_ok())
+                    .then_some(())
+                    .ok_or(format!(
+                        "One or more triggers failed to run on frame {}",
+                        frame.frame_num
+                    ))?;
+            }
+            FfmpegEvent::LogError(msg) | FfmpegEvent::Error(msg) => {
+                eprintln!("[ffmpeg] {}", msg)
+            }
+            e if self.verbose => println!("[ffmpeg] {:?}", e),
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
     pub fn run(&mut self) -> Result<()> {
-        println!("[hypetrigger] run_iter()");
+        println!("[hypetrigger] run");
 
         self.ffmpeg_command()
             .spawn()?
             .iter()?
-            .for_each(|event| match event {
-                FfmpegEvent::OutputFrame(frame) => {
-                    let image = match RgbImage::from_vec(frame.width, frame.height, frame.data) {
-                        Some(image) => image,
-                        None => return eprintln!("Failed to convert frame to image"),
-                    };
-                    let frame = Frame {
-                        image,
-                        frame_num: frame.frame_num as u64,
-                        timestamp: frame.timestamp as f64,
-                    };
-                    self.triggers.iter().for_each(|trigger| {
-                        trigger.on_frame(&frame).ok();
-                    });
-                }
-                FfmpegEvent::LogError(msg) | FfmpegEvent::Error(msg) => {
-                    eprintln!("[ffmpeg] {}", msg)
-                }
-                e if self.verbose => println!("[ffmpeg] {:?}", e),
-                _ => {}
-            });
+            .for_each(|event| self.handle_triggers(event).unwrap_or(()));
 
         Ok(())
     }
