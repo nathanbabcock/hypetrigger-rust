@@ -488,6 +488,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ffmpeg-sidecar"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ce493fc096c1bed15586b0d9b35206b6dbcf53aa828e48ab416084b357cfc43"
+
+[[package]]
 name = "filetime"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -764,6 +770,7 @@ name = "hypetrigger"
 version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
+ "ffmpeg-sidecar",
  "image",
  "lazy_static",
  "photon-rs",

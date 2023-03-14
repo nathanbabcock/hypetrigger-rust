@@ -26,6 +26,7 @@ tensorflow = ["photon", "dep:tensorflow"]
 wasm = ["photon"]
 
 [dependencies]
+ffmpeg-sidecar = "0.3.0"
 wasm-bindgen = "0.2.83"
 lazy_static = "1.4.0"
 regex = "1.5.5"

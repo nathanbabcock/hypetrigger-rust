@@ -43,3 +43,6 @@ pub mod trigger;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod util;
+
+//// Re-exports
+pub use ffmpeg_sidecar as ffmpeg;

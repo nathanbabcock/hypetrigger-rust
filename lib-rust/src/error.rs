@@ -76,6 +76,12 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<ffmpeg_sidecar::error::Error> for Error {
+    fn from(e: ffmpeg_sidecar::error::Error) -> Self {
+        Error::from_std(e)
+    }
+}
+
 impl From<image::ImageError> for Error {
     fn from(e: image::ImageError) -> Self {
         Error::from_std(e)

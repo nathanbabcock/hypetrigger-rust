@@ -3,6 +3,7 @@ use crate::{
     trigger::{Frame, Trigger},
     util::{command_to_string, parse_ffmpeg_output_size},
 };
+use ffmpeg_sidecar::{command::FfmpegCommand, event::FfmpegEvent};
 use image::RgbImage;
 use std::io::Write;
 use std::os::windows::process::CommandExt;
@@ -26,8 +27,11 @@ pub type HypetriggerOnCompleteCallback = Arc<dyn Fn() + Send + Sync>;
 
 #[derive(Clone)]
 pub struct Hypetrigger {
-    // Path the the ffmpeg binary or command to use
+    /// Path the the ffmpeg binary or command to use
     pub ffmpeg_exe: String,
+
+    /// Print all FFmpeg log output to stderr
+    pub verbose: bool,
 
     /// Path to input video (or image) for ffmpeg. Corresponds to ffmpeg `-i` arg.
     pub input: String,
@@ -64,6 +68,7 @@ impl Hypetrigger {
     pub fn new() -> Self {
         Self {
             ffmpeg_exe: "ffmpeg".to_string(),
+            verbose: false,
             input: "".to_string(),
             input_format: None,
             fps: 2,
@@ -76,6 +81,12 @@ impl Hypetrigger {
     /// Setter for the ffmpeg binary or command to use
     pub fn set_ffmpeg_exe(&mut self, ffmpeg_exe: String) -> &mut Self {
         self.ffmpeg_exe = ffmpeg_exe;
+        self
+    }
+
+    /// Enable or disable verbose logging
+    pub fn set_verbose(&mut self, verbose: bool) -> &mut Self {
+        self.verbose = verbose;
         self
     }
 
@@ -130,8 +141,55 @@ impl Hypetrigger {
     }
 
     // --- Behavior ---
+
+    pub fn ffmpeg_command(&self) -> FfmpegCommand {
+        let mut cmd = FfmpegCommand::new_with_path(self.ffmpeg_exe.as_str());
+        cmd.hwaccel("auto");
+        if let Some(input_format) = &self.input_format {
+            cmd.format(input_format);
+        }
+        cmd.input(self.input.as_str())
+            .args(["-filter:v", &format!("fps={}", self.fps)])
+            .args(["-vsync", "drop"])
+            .no_audio() // -an
+            .overwrite() // -y
+            .rawvideo();
+        cmd
+    }
+
     /// Spawn ffmpeg, call callbacks on each frame, and block until completion.
     pub fn run(&mut self) -> Result<()> {
+        println!("[hypetrigger] run_iter()");
+
+        self.ffmpeg_command()
+            .spawn()?
+            .iter()?
+            .for_each(|event| match event {
+                FfmpegEvent::OutputFrame(frame) => {
+                    let image = match RgbImage::from_vec(frame.width, frame.height, frame.data) {
+                        Some(image) => image,
+                        None => return eprintln!("Failed to convert frame to image"),
+                    };
+                    let frame = Frame {
+                        image,
+                        frame_num: frame.frame_num as u64,
+                        timestamp: frame.timestamp as f64,
+                    };
+                    self.triggers.iter().for_each(|trigger| {
+                        trigger.on_frame(&frame).ok();
+                    });
+                }
+                FfmpegEvent::LogError(msg) | FfmpegEvent::Error(msg) => {
+                    eprintln!("[ffmpeg] {}", msg)
+                }
+                e if self.verbose => println!("[ffmpeg] {:?}", e),
+                _ => {}
+            });
+
+        Ok(())
+    }
+
+    pub fn run_old(&mut self) -> Result<()> {
         println!("[hypetrigger] run()");
 
         // Spawn FFMPEG command
@@ -232,7 +290,7 @@ impl Hypetrigger {
                 }
                 frame_num += 1;
             }
-            
+
             println!("[ffmpeg.out] Finished reading from stdout");
             if let Some(callback) = &self.on_complete_callback {
                 callback();
