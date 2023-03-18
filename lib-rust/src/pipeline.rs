@@ -2,7 +2,10 @@ use crate::{
     error::{Error, Result},
     trigger::{Frame, Trigger},
 };
-use ffmpeg_sidecar::{command::FfmpegCommand, event::FfmpegEvent};
+use ffmpeg_sidecar::{
+    command::FfmpegCommand,
+    event::{FfmpegEvent, LogLevel},
+};
 use image::RgbImage;
 use std::io::Write;
 use std::{process::ChildStdin, thread::JoinHandle};
@@ -168,7 +171,7 @@ impl Hypetrigger {
                         frame.frame_num
                     ))?;
             }
-            FfmpegEvent::LogError(msg) | FfmpegEvent::Error(msg) => {
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, msg) | FfmpegEvent::Error(msg) => {
                 eprintln!("[ffmpeg] {}", msg)
             }
             e if self.verbose => println!("[ffmpeg] {:?}", e),

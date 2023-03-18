@@ -495,9 +495,9 @@ dependencies = [
 
 [[package]]
 name = "ffmpeg-sidecar"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ce493fc096c1bed15586b0d9b35206b6dbcf53aa828e48ab416084b357cfc43"
+checksum = "3b7c039452480a24ce306a2c5272417dcdb70cfab0ef98415fd9a7eb96e50ef2"
 
 [[package]]
 name = "filetime"
