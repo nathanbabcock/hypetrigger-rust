@@ -45,8 +45,7 @@ pub struct TriggerThread {
 
 impl TriggerThread {
     /// Prepares a new thread capable of running Triggers, including the
-    /// communication channels, spawning the thread itself, and wrapping the
-    /// whole struct in an `Arc`.
+    /// communication channels, and spawns the thread.
     pub fn spawn() -> Self {
         let (tx, rx) = std::sync::mpsc::sync_channel::<TriggerCommand>(100);
         let join_handle = thread::spawn(move || {
