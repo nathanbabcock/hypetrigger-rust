@@ -44,6 +44,10 @@ pub struct Hypetrigger {
     /// Callback when the video is finished processing. Particularly useful in
     /// combination with `run_async`.
     pub on_complete_callback: Option<HypetriggerOnCompleteCallback>,
+
+    /// Callback on every item of the inner `ffmpeg_sidecar` iterator.
+    /// Note: output frames are omitted for memory performance reasons.
+    pub on_event_callback: Option<HypetriggerOnFfmpegEventCallback>,
 }
 
 impl Default for Hypetrigger {
@@ -63,6 +67,7 @@ impl Hypetrigger {
             fps: 2,
             triggers: vec![],
             on_complete_callback: None,
+            on_event_callback: None,
         }
     }
 
@@ -129,6 +134,16 @@ impl Hypetrigger {
         self
     }
 
+    /// Call the given function every time FFmpeg emits an event (like a log
+    /// message or parsed metadata). Note: output frames are excluded.
+    pub fn on_ffmpeg_event<T>(&mut self, callback: T) -> &mut Self
+    where
+        T: Fn(&FfmpegEvent) + Send + Sync + 'static,
+    {
+        self.on_event_callback = Some(Arc::new(callback));
+        self
+    }
+
     // --- Behavior ---
 
     /// Spawn the inner FFmpeg command. This is a lower-level function that
@@ -152,6 +167,17 @@ impl Hypetrigger {
     /// A lower-level function handles both running triggers on each output
     /// frame of FFmpeg, as well as logging when appropriate.
     pub fn handle_triggers(&self, event: FfmpegEvent) -> Result<()> {
+        // Handle callbacks, if any
+        if let Some(callback) = &self.on_event_callback {
+            match &event {
+                FfmpegEvent::OutputFrame(_) | FfmpegEvent::OutputChunk(_) => {}
+                _ => {
+                    callback(&event);
+                }
+            }
+        }
+
+        // Handle triggers
         match event {
             FfmpegEvent::OutputFrame(frame) => {
                 let image = RgbImage::from_vec(frame.width, frame.height, frame.data)
@@ -210,6 +236,7 @@ impl Hypetrigger {
 }
 
 pub type HypetriggerOnCompleteCallback = Arc<dyn Fn() + Send + Sync>;
+pub type HypetriggerOnFfmpegEventCallback = Arc<dyn Fn(&FfmpegEvent) + Send + Sync>;
 
 /// Used with the ffmpeg `-i` argument, or with `.input()` in the Hypetrigger API.
 /// <https://www.bogotobogo.com/FFMpeg/ffmpeg_video_test_patterns_src.php>
