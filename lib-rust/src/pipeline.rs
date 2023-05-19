@@ -155,6 +155,9 @@ impl Hypetrigger {
         if let Some(input_format) = &self.input_format {
             cmd.format(input_format);
         }
+        if cfg!(target_os = "windows") {
+            cmd.create_no_window();
+        }
         cmd.input(self.input.as_str())
             .args(["-filter:v", &format!("fps={}", self.fps)])
             .args(["-vsync", "drop"])
@@ -168,11 +171,11 @@ impl Hypetrigger {
     /// frame of FFmpeg, as well as logging when appropriate.
     pub fn handle_triggers(&self, event: FfmpegEvent) -> Result<()> {
         // Handle callbacks, if any
-        if let Some(callback) = &self.on_event_callback {
+        if let Some(event_callback) = &self.on_event_callback {
             match &event {
                 FfmpegEvent::OutputFrame(_) | FfmpegEvent::OutputChunk(_) => {}
                 _ => {
-                    callback(&event);
+                    event_callback(&event);
                 }
             }
         }
@@ -196,6 +199,11 @@ impl Hypetrigger {
                         "One or more triggers failed to run on frame {}",
                         frame.frame_num
                     ))?;
+            }
+            FfmpegEvent::Done => {
+                if let Some(complete_callback) = &self.on_complete_callback {
+                    complete_callback()
+                }
             }
             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, msg) | FfmpegEvent::Error(msg) => {
                 eprintln!("[ffmpeg] {}", msg)
