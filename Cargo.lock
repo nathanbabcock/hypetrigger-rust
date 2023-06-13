@@ -1659,10 +1659,6 @@ dependencies = [
 [[package]]
 name = "rust-simple"
 version = "0.1.0"
-dependencies = [
- "hypetrigger",
- "image",
-]
 
 [[package]]
 name = "rust-tesseract"
