@@ -796,6 +796,7 @@ dependencies = [
  "reqwest",
  "tensorflow",
  "tesseract",
+ "vcpkg",
  "wasm-bindgen",
  "web-sys",
  "wee_alloc",

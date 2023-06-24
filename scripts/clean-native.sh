@@ -5,3 +5,4 @@ cargo clean -p leptonica-sys
 cargo clean -p tesseract
 cargo clean -p tesseract-plumbing
 cargo clean -p tesseract-sys
+cargo clean -p vcpkg
