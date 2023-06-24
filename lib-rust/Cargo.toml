@@ -21,12 +21,13 @@ tesseract = ["photon", "dep:reqwest", "dep:tesseract"]
 tensorflow = ["photon", "dep:tensorflow"]
 wasm = ["photon", "dep:console_error_panic_hook"]
 
-# Build native Vcpkg dependencies automatically via: https://crates.io/crates/cargo-vcpkg
+# Run `cargo install cargo-vcpkg && cargo vcpkg build` for native deps
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
 rev = "4c1db68"
 dependencies = ["leptonica", "tesseract"]
 
+# Ensure that `cargo-vcpkg` picks the `-static-md` triplet
 [package.metadata.vcpkg.target]
 x86_64-pc-windows-msvc = { triplet = "x64-windows-static-md" }
 

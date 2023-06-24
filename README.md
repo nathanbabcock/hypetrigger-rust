@@ -239,7 +239,14 @@ Should be installed automatically by Cargo.
 
 ### Tesseract
 
-Install manually with `vcpkg` ([Github](https://github.com/microsoft/vcpkg#quick-start-windows)):
+Install with `cargo-vcpkg`:
+
+```sh
+cargo install cargo-vcpkg
+cargo vcpkg build
+```
+
+**Or** install manually with `vcpkg` ([Github](https://github.com/microsoft/vcpkg#quick-start-windows)):
 
 ```sh
 git clone https://github.com/microsoft/vcpkg
