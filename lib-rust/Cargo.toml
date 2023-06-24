@@ -10,17 +10,16 @@ keywords = ["ffmpeg", "tensorflow", "tesseract", "gpu", "video"]
 repository = "https://github.com/nathanbabcock/hypetrigger"
 readme = "../README.md"
 license = "MIT"
-build = "build.rs"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["console_error_panic_hook"]
+default = ["tesseract"]
 photon = ["dep:photon-rs"]
 tesseract = ["photon", "dep:reqwest", "dep:tesseract"]
 tensorflow = ["photon", "dep:tensorflow"]
-wasm = ["photon"]
+wasm = ["photon", "dep:console_error_panic_hook"]
 
 # Build native Vcpkg dependencies automatically via: https://crates.io/crates/cargo-vcpkg
 [package.metadata.vcpkg]
@@ -30,9 +29,6 @@ dependencies = ["leptonica", "tesseract"]
 
 [package.metadata.vcpkg.target]
 x86_64-pc-windows-msvc = { triplet = "x64-windows-static-md" }
-
-[build-dependencies]
-vcpkg = "0.2.15"
 
 [dependencies]
 tesseract = { version = "0.13.0", optional = true }

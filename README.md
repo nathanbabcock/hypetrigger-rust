@@ -9,6 +9,16 @@
 
 > Perform efficient per-frame operations on streaming video.
 
+## Getting Started (Rust)
+
+```sh
+cargo add hypetrigger
+
+# Install native dependencies w/ Vcpkg
+cargo install cargo-vcpkg
+cargo vcpkg build
+```
+
 ## What does it do?
 
 - 🎥 **Streaming video input** with
@@ -59,12 +69,7 @@ Video → FFMPEG → Tensorflow/Tesseract/Custom → Callback
    MEDIA SOURCE        VIDEO DECODING        COMPUTER VISION     CALLBACK
 ```
 
-
-## Getting started (Rust)
-
-```console
-cargo add hypetrigger
-```
+## Simple example (Rust)
 
 ```rs
 use hypetrigger::{Hypetrigger, SimpleTrigger};
